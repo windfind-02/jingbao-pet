@@ -48,7 +48,8 @@ window.__ModuleLoader__.load({
 		/** 语音（点击/确认时播放，mp3 在 dist；音色为克隆的鲸宝专属声线）。 */
 		const VOICES = {
 			poke: ["/voice_poke_1.mp3", "/voice_poke_2.mp3", "/voice_poke_3.mp3", "/voice_poke_4.mp3"],
-			confirm: ["/voice_confirm_1.mp3", "/voice_confirm_2.mp3", "/voice_confirm_3.mp3", "/voice_confirm_4.mp3"]
+			confirm: ["/voice_confirm_1.mp3", "/voice_confirm_2.mp3", "/voice_confirm_3.mp3", "/voice_confirm_4.mp3"],
+			done: ["/voice_done_1.mp3", "/voice_done_2.mp3", "/voice_done_3.mp3"]
 		};
 		/** 桌宠显示高度默认值（可缩放范围 128~512）。 */
 		const PET_HEIGHT_DEFAULT = 256;
@@ -89,6 +90,12 @@ window.__ModuleLoader__.load({
 			"嘿嘿，鲸宝好开心～",
 			"主人～鲸宝最喜欢你啦！",
 			"主人最喜欢鲸宝了对吧？"
+		];
+		/** 任务完成播报（与 voice_done_1~3.mp3 一一对应）。 */
+		const DONE_LINES = [
+			"主人，任务完成啦！",
+			"主人，任务已经完成了哦~",
+			"主人，快来看看任务完成的怎么样吧~"
 		];
 		const HOVER_LINES = [];
 		const INPUT_LINES = [
@@ -509,6 +516,10 @@ window.__ModuleLoader__.load({
 				'  <label class="jb-menu-item"><input type="checkbox" data-k="cpu" /> CPU 占用率</label>',
 				'  <label class="jb-menu-item"><input type="checkbox" data-k="mem" /> 内存占用率</label>',
 				'  <label class="jb-menu-item"><input type="checkbox" data-k="gpu" /> 显卡占用率</label>',
+				'  <div class="jb-menu-title">🔊 语音播报</div>',
+				'  <label class="jb-menu-item"><input type="checkbox" data-k="voiceConfirm" /> 需求确认播报</label>',
+				'  <label class="jb-menu-item"><input type="checkbox" data-k="voicePoke" /> 点击互动播报</label>',
+				'  <label class="jb-menu-item"><input type="checkbox" data-k="voiceDone" /> 任务完成播报</label>',
 				"</div>",
 				'<div class="jb-monitor" aria-hidden="true"><span class="jb-monitor-text"></span></div>',
 				'<button class="jb-body" type="button" aria-label="鲸宝桌宠">',
@@ -732,6 +743,9 @@ window.__ModuleLoader__.load({
 			// 不能停局部 voiceCache —— apply 重入时两个实例的局部池互不相通，会双双播放！
 			function playVoiceIndex(group, idx) {
 				try {
+					// 语音开关：confirm→voiceConfirm / poke→voicePoke / done→voiceDone（右键菜单控制）
+					const voiceKey = group === "confirm" ? "voiceConfirm" : group === "poke" ? "voicePoke" : group === "done" ? "voiceDone" : null;
+					if (voiceKey && monitor && monitor[voiceKey] === false) return;  // 该语音已关闭 → 不播
 					const list = voiceCache[group];
 					if (!list || !list[idx]) return;
 					jbStopAllVoices();             // 停全局池（跨实例互斥）
@@ -847,8 +861,9 @@ window.__ModuleLoader__.load({
 				applyPetSize();
 			}, { passive: false });
 			// 5f. 右键菜单 + 系统监控（CPU/内存/显卡，数据来自本地 8765 监控服务）
+			//      + 语音播报开关（确认/点击/任务完成，默认全开）
 			const MONITOR_KEY = "dsh.pet.monitor.v1";
-			let monitor = { enabled: false, cpu: true, mem: true, gpu: true };
+			let monitor = { enabled: false, cpu: true, mem: true, gpu: true, voiceConfirm: true, voicePoke: true, voiceDone: true };
 			try {
 				monitor = Object.assign(monitor, JSON.parse(localStorage.getItem(MONITOR_KEY) || "{}"));
 			} catch (e) { /* ignore */ }
@@ -859,9 +874,10 @@ window.__ModuleLoader__.load({
 				menu.querySelectorAll("input[data-k]").forEach((cb) => {
 					const k = cb.dataset.k;
 					cb.checked = monitor[k] === true;
-					const isSub = k !== "enabled";
-					cb.disabled = isSub && !monitor.enabled;
-					cb.parentElement.style.opacity = isSub && !monitor.enabled ? "0.45" : "1";
+					// 监控子项受 enabled 控制；语音开关独立（不受监控开关影响）
+					const isMonSub = k === "cpu" || k === "mem" || k === "gpu";
+					cb.disabled = isMonSub && !monitor.enabled;
+					cb.parentElement.style.opacity = isMonSub && !monitor.enabled ? "0.45" : "1";
 				});
 			}
 			body.addEventListener("contextmenu", (e) => {
@@ -879,7 +895,12 @@ window.__ModuleLoader__.load({
 				if (!cb) return;
 				const k = cb.dataset.k;
 				if (k === "enabled") monitor.enabled = cb.checked;
-				else if (monitor.enabled) monitor[k] = cb.checked;
+				else if (k === "cpu" || k === "mem" || k === "gpu") {
+					if (monitor.enabled) monitor[k] = cb.checked;
+				} else {
+					// 语音开关：独立控制，不受监控开关影响
+					monitor[k] = cb.checked;
+				}
 				saveMonitor();
 				renderMenu();
 				startMonitor();
@@ -887,15 +908,9 @@ window.__ModuleLoader__.load({
 			// 监控轮询（每 2 秒）
 			let statsTimer = null;
 			function positionMonitor() {
-				// 默认在桌宠下方；若溢出视口底部则自动切到上方（贴底时不挡气泡）
-				const rect = monitorPanel.getBoundingClientRect();
-				if (rect.bottom > window.innerHeight) {
-					monitorPanel.style.top = "auto";
-					monitorPanel.style.bottom = "calc(100% + 16px)";
-				} else {
-					monitorPanel.style.top = "calc(100% + 10px)";
-					monitorPanel.style.bottom = "auto";
-				}
+				// 固定显示在鲸宝下方（不再自动检测视口位置）
+				monitorPanel.style.top = "calc(100% + 10px)";
+				monitorPanel.style.bottom = "auto";
 			}
 			function fetchStats() {
 				fetch("http://127.0.0.1:8765/stats")
@@ -967,8 +982,26 @@ window.__ModuleLoader__.load({
 			// 9. 确认联动：检测到确认弹窗 → 鲸宝冒泡提示（不自动消失、暂停随机动作）；
 			//    主人处理完（弹窗关闭/按钮点击）→ 气泡立即消失并恢复随机动作
 			let pendingConfirm = null;  // 挂起的确认（记录弹窗容器，用于检测关闭）
+			let lastAnnouncedKey = null;  // 最近播报过的确认的特征 key（同弹窗去重用）
+			/** 生成确认弹窗的特征 key：只取按钮文本（最稳定；summary/text 在重渲染时可能缺失/变化）。 */
+			function confirmKey(info) {
+				try {
+					const parts = [];
+					if (info.yesBtn) parts.push("Y:" + (info.yesBtn.textContent || "").trim().slice(0, 12));
+					if (info.noBtn) parts.push("N:" + (info.noBtn.textContent || "").trim().slice(0, 12));
+					return parts.join("|") || "";
+				} catch (e) { return ""; }
+			}
+			let lastHandledBtns = [];  // 刚处理完的确认弹窗的按钮元素（残留识别：同一元素再出现 = 残留）
+			let lastHandledAt = 0;
+			const CONFIRM_HANDLE_WINDOW = 1500;  // 处理完 1.5s 内，同一按钮元素视为残留
 			function finishConfirm() {
 				if (!pendingConfirm) return;
+				// 记录刚处理弹窗的按钮元素（React 关闭动画/重渲染时这些元素可能还在 → 识别为残留）
+				lastHandledBtns = [];
+				if (pendingConfirm.yesBtn) lastHandledBtns.push(pendingConfirm.yesBtn);
+				if (pendingConfirm.noBtn) lastHandledBtns.push(pendingConfirm.noBtn);
+				lastHandledAt = Date.now();
 				pendingConfirm = null;
 				bubbleActions.classList.remove("show");
 				bubble.classList.remove("show");
@@ -993,7 +1026,7 @@ window.__ModuleLoader__.load({
 			// 终极兜底：不依赖 container，定期检查页面里是否还存在「确认/取消」类按钮；
 			// 弹窗关闭（按钮被移除）→ 气泡消失 + 恢复随机动作
 			function trackConfirmFallback() {
-				if (!pendingConfirm) return;
+				if (!pendingConfirm) return;  // 无挂起确认时停止轮询
 				let hasBtn = false;
 				try {
 					const all = document.querySelectorAll("button, [role='button']");
@@ -1005,13 +1038,15 @@ window.__ModuleLoader__.load({
 						}
 					}
 				} catch (e) { /* ignore */ }
-				if (!hasBtn) {
-					finishConfirm();
+				if (!hasBtn && pendingConfirm) {
+					finishConfirm();  // 挂起的确认按钮消失 = 弹窗正常关闭
 					return;
 				}
+				// 残留窗口：不提前清空，等 MO 检测到过期时自然清理
 				setTimeout(trackConfirmFallback, 500);
 			}
 			let lastConfirmAt = 0;
+			let pendingAnnounce = null;  // 待验证的播报（延迟验证弹窗是否真实存在）
 			const mo = new MutationObserver((muts) => {
 				// 弹窗被移除/隐藏（ESC、遮罩、React 隐藏）→ 气泡消失 + 恢复计时器
 				if (pendingConfirm && pendingConfirm.container) {
@@ -1029,10 +1064,45 @@ window.__ModuleLoader__.load({
 						const info = findConfirmSignal(added[j]);
 						if (info) {
 							const now = Date.now();
-							if (now - lastConfirmAt >= CONFIRM_COOLDOWN) {
-								lastConfirmAt = now;
-								showConfirmBubble(info);
+							const key = confirmKey(info);
+							// 同弹窗去重：当前挂起的确认（内容相同）不重复播
+							const sameDialog = pendingConfirm && lastAnnouncedKey && key && key === lastAnnouncedKey;
+							if (sameDialog) return;
+							// 残留识别：信号按钮是"刚处理完弹窗"的同一个按钮元素，且在 1.5s 窗口内 → 残留
+							// （React 关闭动画/重渲染会复用同一按钮元素；新弹窗的按钮是全新元素）
+							const nowH = Date.now();
+							const isHandledBtn = lastHandledBtns.length > 0 && nowH - lastHandledAt < CONFIRM_HANDLE_WINDOW &&
+								((info.yesBtn && lastHandledBtns.indexOf(info.yesBtn) !== -1) ||
+								 (info.noBtn && lastHandledBtns.indexOf(info.noBtn) !== -1));
+							if (isHandledBtn) return;
+							// 残留窗口已过期：清空按钮引用（不持有 DOM 引用，无内存残留）
+							if (lastHandledBtns.length > 0 && nowH - lastHandledAt >= CONFIRM_HANDLE_WINDOW) {
+								lastHandledBtns = [];
+								lastHandledAt = 0;
 							}
+							// 延迟验证法：信号出现后 400ms 再看"信号自己的按钮是否还在页面上"。
+							//   - 真新需求：弹窗稳定存在 → 按钮还在 → 播（覆盖播放）
+							//   - React 残留：按钮被移除/替换 → 400ms 后不在 → 不播
+							// 注意：只验证信号自己的按钮，**不检查页面其他按钮**（新弹窗的按钮会导致残留误判）
+							if (pendingAnnounce) { clearTimeout(pendingAnnounce); pendingAnnounce = null; }
+							const schedInfo = info;
+							pendingAnnounce = setTimeout(() => {
+								pendingAnnounce = null;
+								// 验证：信号自己的按钮还在页面上吗？
+								let stillThere = false;
+								try {
+									if (schedInfo.yesBtn && document.contains(schedInfo.yesBtn)) stillThere = true;
+									else if (schedInfo.noBtn && document.contains(schedInfo.noBtn)) stillThere = true;
+								} catch (e) { /* ignore */ }
+								if (!stillThere) return;  // 按钮已消失 = 残留 → 不播
+								// 真弹窗：播报（覆盖上一条未播完的语音）
+								const t2 = Date.now();
+								if (t2 - lastConfirmAt >= 200) {  // 极小防抖，避免同批次重复调度
+									lastConfirmAt = t2;
+									lastAnnouncedKey = key;
+									showConfirmBubble(schedInfo);
+								}
+							}, 400);
 							return;
 						}
 					}
@@ -1053,6 +1123,112 @@ window.__ModuleLoader__.load({
 					setTimeout(finishConfirm, 350);  // 稍等弹窗关闭
 				}
 			}, true);
+
+			// 9b. 任务完成播报：监听「新插入」的任务结束标记 → 播报任务完成
+			// DSH 任务结束后会**新插入**产物数据栏，特征是「固定词 + 变化数字 + 固定词」：
+			//   "用时 37秒" / "耗时 2.1秒" / "首 token 2.1秒" / "154 tok/s"
+			// 用 MutationObserver 只看**新增节点**：刷新页面时历史消息不算新增，
+			// 只有任务完成时新插入的数据栏才算 → 不会刷新就误播
+			let lastTaskDoneAt = 0;
+			const TASK_DONE_COOLDOWN = 20000;  // 完成后 20 秒内不重复播报
+			// 完整句式：固定词 + 数字 + 固定词（数字可变）
+			const TASK_METRIC_RE = /(用时|耗时|消耗|共花费)\s*[0-9.]+(秒|s|分钟|分)|首\s?token\s*[0-9.]+(秒|s)|[0-9.]+\s*tok\/?s|[0-9.]+\s*tokens?\/s/i;
+			/** 判断节点文本是否含任务结束句式（含 title/aria-label 隐藏参数）。 */
+			function nodeHasDoneMarker(node) {
+				try {
+					if (!node || node.nodeType !== 1) return false;
+					if (node.closest && node.closest("#jingbao-pet")) return false;  // 排除桌宠自身
+					// 节点自身文本（聚合子元素）
+					const t = (node.textContent || "").trim();
+					if (t && t.length <= 800 && TASK_METRIC_RE.test(t)) return true;
+					// 直接检查 title/aria-label 隐藏参数（鼠标移上去看到的）
+					if (node.getAttribute) {
+						const title = node.getAttribute("title") || node.getAttribute("aria-label") || "";
+						if (title && title.length <= 200 && TASK_METRIC_RE.test(title)) return true;
+					}
+					// 新增节点可能是整条消息（含"用时"的子元素在深层）：从它下面找含句式的最深元素
+					if (node.querySelectorAll) {
+						const hits = node.querySelectorAll("[title], [aria-label], span, div, time");
+						const cap = Math.min(hits.length, 200);
+						for (let i = 0; i < cap; i += 1) {
+							const el = hits[i];
+							const tt = (el.textContent || "").trim();
+							if (tt && tt.length <= 120 && TASK_METRIC_RE.test(tt)) return true;
+							const at = el.getAttribute && (el.getAttribute("title") || el.getAttribute("aria-label") || "");
+							if (at && at.length <= 120 && TASK_METRIC_RE.test(at)) return true;
+						}
+					}
+				} catch (e) { /* ignore */ }
+				return false;
+			}
+			// 任务结束标记 MutationObserver（全局单例，apply 重入时先断开旧的）
+			// 同时监听 childList（新增节点）和 characterData（文本更新）——
+			// DSH 可能"先插入空数据栏再填充文本"（更新已有文本节点），两种都覆盖
+			const jbDoneMO = new MutationObserver((muts) => {
+				// 预热期：页面加载后 3 秒内不播报（等初始 DOM 稳定，避免把已有历史当新任务）
+				if (Date.now() < jbDoneReadyAt) return;
+				for (let i = 0; i < muts.length; i += 1) {
+					const m = muts[i];
+					// 1. 新增节点（任务完成后新插入的数据栏/消息）
+					const added = m.addedNodes;
+					for (let j = 0; j < added.length; j += 1) {
+						if (nodeHasDoneMarker(added[j])) {
+							announceTaskDone();
+							return;
+						}
+					}
+					// 2. 文本更新（characterData）：检查目标文本节点的父元素（数据栏填充内容）
+					if (m.type === "characterData" && m.target && m.target.parentElement) {
+						if (nodeHasDoneMarker(m.target.parentElement)) {
+							announceTaskDone();
+							return;
+						}
+					}
+				}
+			});
+			// 触发一次任务完成播报（带 20s 冷却 + 等文字动画播完）
+			function announceTaskDone() {
+				const now = Date.now();
+				if (now - lastTaskDoneAt >= TASK_DONE_COOLDOWN) {
+					lastTaskDoneAt = now;
+					lastActivity = Date.now();  // 播报也算活跃，不打断瞌睡判定
+					scheduleDoneAnnounce();  // 等文字动画播完再播报
+				}
+			}
+			if (window.__jbDoneMO) { try { window.__jbDoneMO.disconnect(); } catch (e) { /* 忽略 */ } }
+			window.__jbDoneMO = jbDoneMO;
+			const jbDoneReadyAt = Date.now() + 3000;  // 3 秒预热期
+			jbDoneMO.observe(document.body, { childList: true, characterData: true, subtree: true });
+			// 任务完成播报：检测到结束标记后**立即**播报（检测很准，无需等动画/延迟）
+			function scheduleDoneAnnounce() {
+				const dIdx = Math.floor(Math.random() * DONE_LINES.length);
+				showBubble(DONE_LINES[dIdx], 4000);
+				playVoiceIndex("done", dIdx);  // 语音与气泡同句
+			}
+			// 测试钩子：模拟一次任务完成播报（主人验收用）
+			window.__jbTestDone = () => {
+				const dIdx = Math.floor(Math.random() * DONE_LINES.length);
+				showBubble(DONE_LINES[dIdx], 4000);
+				playVoiceIndex("done", dIdx);
+			};
+			// 调试钩子：扫描页面上已存在的任务结束标记，返回检测状态（排查用）
+			window.__jbTaskScan = () => {
+				const hits = [];
+				try {
+					document.querySelectorAll("span, div, p, [title], [aria-label]").forEach((el) => {
+						if (el.closest && el.closest("#jingbao-pet")) return;
+						const t = (el.textContent || "").trim();
+						if (t && t.length <= 120 && TASK_METRIC_RE.test(t)) {
+							hits.push({ type: "metric", text: t.slice(0, 60), cls: (el.className || "").toString().slice(0, 50), tag: el.tagName });
+						}
+						const at = el.getAttribute && (el.getAttribute("title") || el.getAttribute("aria-label") || "");
+						if (at && at.length <= 120 && TASK_METRIC_RE.test(at)) {
+							hits.push({ type: "attr", text: at.slice(0, 60), tag: el.tagName });
+						}
+					});
+				} catch (e) { /* ignore */ }
+				return { hits };
+			};
 
 			// 10. 待机随机卖萌（瞌睡时冒 zzz，正常时冒卖萌语）
 			function scheduleIdle(delay) {
