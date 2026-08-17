@@ -13,6 +13,30 @@ Powered by **MiniMax H3 image-to-video** real smooth animations (seamless first/
 
 ---
 
+## ⭐ 鲸宝的杀手锏（Killer Features）
+
+### 🔔 1. 需求确认 · 语音播报提醒 — 人不在对话页也能听到！
+
+当页面弹出「需要确认」的请求框时，鲸宝不仅会冒气泡提醒，还会**用她软萌的克隆声线语音播报**！这意味着：
+
+- **你不在对话页也能知道有需求在等你确认** —— 挂机跑任务、切到别的窗口，都绝不会错过关键确认
+- **处理完弹窗，气泡和语音立即安静下来**，不会一直吵你
+- 智能识别各种确认框（同意 / 允许 / 批准 / 取消…），自动判断你已处理
+
+> 💡 这是很多"动图桌宠"做不到的——鲸宝是**真正会主动提醒你**的小女仆！
+
+### 📊 2. 三参数实时监控 — 你的任务到底还在不在跑，一眼就知道！
+
+右键菜单一键开启系统监控，鲸宝随身显示 **CPU / 内存 / GPU** 三个实时占用率：
+
+- **GPU 占用率**是跑生成任务（ComfyUI 等）的"心跳"——数值在动 = 任务还在跑，静止了 = 卡住或完成了
+- **不用切窗口、不用开任务管理器**，瞄一眼鲸宝就知道任务状态
+- 监控服务**内置在插件里**，随 DSH 自动启停，无需任何手动配置
+
+> 💡 跑长任务时再也不用焦虑"到底还在不在跑"了——鲸宝就是你的任务心跳监视器！
+
+---
+
 ## 🇨🇳 中文介绍
 
 ### 🐳 鲸宝能做什么？
@@ -24,20 +48,20 @@ Powered by **MiniMax H3 image-to-video** real smooth animations (seamless first/
 - **会察言观色**：你离开 3 分钟它就开始犯困打哈欠、头顶飘💤打瞌睡；你一回来它立刻醒来迎接
 - **会关心你**：整点报时（每小时台词都不同）、节日祝福、连续忙 50 分钟劝你休息、深夜 22 点后提醒别熬夜
 - **会回应你**：点击它摇头/比心 + 冒出爱心、按住它挣扎着被拖走、准备打字时它好奇地问你要说什么
-- **能帮你把关**：页面弹出「需要确认」的请求时，它冒泡提醒你；你处理完它立刻安静下来
-- **还能当监控面板**：右键菜单开启后，实时显示 CPU / 内存 / 显卡占用率（随 DSH 自动启停，无需手动开服务）
+- **能帮你把关**：页面弹出「需要确认」的请求时，它**冒泡 + 语音播报**提醒你；你处理完它立刻安静下来
+- **还能当监控面板**：右键菜单开启后，实时显示 CPU / 内存 / 显卡占用率（内置服务，随 DSH 自动启停）
 - **随你心意**：滚轮缩放大小（128~512）、拖到屏幕任意位置（都会记住）
 
 ### ✨ 功能特性
 
 | 类别 | 功能 |
 |---|---|
+| 🔔 语音确认提醒 | 确认弹窗出现时**语音播报** + 气泡提醒，人不在对话页也能听到，处理完自动安静 |
+| 📊 系统监控 | CPU / 内存 / GPU 三参数实时显示，GPU 占用即任务"心跳"，内置服务自动启停 |
 | 🎬 真动画 | 挥手 / 微笑合十 / 眨眼 / 幸福摇头 / 双手比心 / 打哈欠 / 歪头瞌睡 / 醒来 / 被抓——全部 H3 生成、首尾帧无缝循环 |
 | 🗣️ 语音 | 点击 4 句 + 确认 4 句，克隆声线（Qwen3-TTS），气泡与语音同句、瞬时出声不叠加 |
 | 🖱️ 交互 | 点击摇头/比心+爱心特效、按住拖拽（被抓动画）、滚轮缩放（128~512）、右键菜单 |
 | 💬 情感陪伴 | 整点报时（每小时不同台词）、节日祝福、劝休息、深夜关怀、待机卖萌 |
-| 📊 系统监控 | 可选：CPU / 内存 / 显卡实时占用率（内置服务，随 DSH 自动启停） |
-| ✅ 智能确认 | 检测到「需要确认」的请求时冒泡提示，处理完气泡立即消失 |
 | 💤 瞌睡状态机 | 3 分钟无操作 → 打哈欠 → 头顶💤 → 歪头瞌睡循环 → 主人回来播醒来动画 |
 
 ### 📦 安装（两种方式）
@@ -126,30 +150,48 @@ dsh web
 
 ## 🇬🇧 English Introduction
 
+### ⭐ Killer Feature 1: Voice Alert for Confirmation Prompts — Hear It Even When You're Not on the Page!
+
+When a "please confirm" dialog pops up, Jingbao doesn't just show a bubble — she **speaks it aloud in her cute cloned voice**! That means:
+
+- **You'll know a confirmation is waiting even if you're not looking at the page** — while your task runs in the background or you're in another window, you'll never miss a critical confirmation
+- The moment you handle it, the bubble and voice go quiet instantly
+- She smartly recognizes various confirm dialogs (Agree / Allow / Approve / Cancel…) and detects when you've handled them
+
+> 💡 Most "animated sticker" pets can't do this — Jingbao is a maid who **actively reminds you**!
+
+### ⭐ Killer Feature 2: Live CPU / Memory / GPU Monitor — Know Instantly If Your Task Is Still Running!
+
+Enable the system monitor from the right-click menu, and Jingbao shows **CPU / Memory / GPU** usage right beside her:
+
+- **GPU usage is the "heartbeat" of generation tasks** (ComfyUI etc.) — if the number moves, your task is alive; if it's frozen, it's stuck or finished
+- **No window switching, no task manager** — one glance at Jingbao tells you the task status
+- The monitor is **built into the plugin** and auto-managed with DSH — zero manual setup
+
+> 💡 Running a long generation? No more anxiety about whether it's still going — Jingbao is your task heartbeat monitor!
+
 ### 🐳 What Can Jingbao Do?
 
-Jingbao is a **warm-hearted little maid** — much more than an animated sticker:
-
-- **Really moves**: waving, smiling with hands clasped, blinking, happy head-shake, hand-heart gesture, yawning, dozing off, waking up, being grabbed — all high-quality MiniMax H3 animations, smooth and natural
-- **Talks to you**: speaks with her own cloned voice (Qwen3-TTS) on click / confirmation prompts — bubble text and voice always match, instant playback, never overlapping
-- **Reads the room**: if you're away for 3 minutes she starts yawning and dozing with a 💤 above her head; the moment you're back, she wakes up to greet you
-- **Cares about you**: hourly time announcements (different lines each hour), holiday greetings, reminds you to rest after 50 minutes of work, tells you not to stay up late after 22:00
-- **Responds to you**: click her for a happy head-shake / heart gesture with floating hearts, drag her to watch her struggle, she gets curious when you're about to type
-- **Guards your confirmations**: when a "please confirm" dialog appears, she pops up a bubble to remind you; as soon as you handle it, she quiets down
-- **Works as a system monitor**: enable it from the right-click menu to see live CPU / memory / GPU usage (built-in service, auto starts/stops with DSH — no manual setup)
-- **Follows your wishes**: scroll to resize (128–512), drag anywhere on screen (both are remembered)
+- **Really moves**: waving, smiling with hands clasped, blinking, happy head-shake, hand-heart gesture, yawning, dozing off, waking up, being grabbed — all high-quality MiniMax H3 animations
+- **Talks to you**: speaks with her own cloned voice (Qwen3-TTS) on click / confirmation prompts — bubble text and voice always match
+- **Reads the room**: if you're away for 3 minutes she starts yawning and dozing with a 💤; the moment you're back, she wakes up to greet you
+- **Cares about you**: hourly time announcements, holiday greetings, rest reminders, late-night care
+- **Responds to you**: click for head-shake / heart gesture with floating hearts, drag to watch her struggle
+- **Guards your confirmations**: voice + bubble alert for confirm dialogs; quiets down when handled
+- **Works as a system monitor**: live CPU / memory / GPU usage, built-in service auto-managed
+- **Follows your wishes**: scroll to resize (128–512), drag anywhere (remembered)
 
 ### ✨ Features
 
 | Category | Feature |
 |---|---|
-| 🎬 Real Animations | Wave / smile / blink / head-shake / hand-heart / yawn / sleepy loop / wake-up / grabbed — all H3-generated, seamless looping |
-| 🗣️ Voice | 4 click lines + 4 confirm lines, cloned voice (Qwen3-TTS), synced with bubble text, instant & non-overlapping |
-| 🖱️ Interaction | Click → head-shake / heart + floating hearts, drag → grabbed animation, scroll → resize (128–512), right-click menu |
+| 🔔 Voice Confirm Alerts | **Spoken alerts** + bubble for confirm dialogs — hear it even away from the page, auto-quiet when handled |
+| 📊 System Monitor | Live CPU / Memory / GPU — GPU usage is your task "heartbeat", built-in & auto-managed |
+| 🎬 Real Animations | Wave / smile / blink / head-shake / hand-heart / yawn / sleepy loop / wake-up / grabbed — all H3-generated, seamless |
+| 🗣️ Voice | 4 click lines + 4 confirm lines, cloned voice (Qwen3-TTS), synced with bubble text |
+| 🖱️ Interaction | Click → head-shake / heart + floating hearts, drag → grabbed, scroll → resize (128–512), right-click menu |
 | 💬 Companionship | Hourly greetings, holiday wishes, rest reminders, late-night care, idle chat |
-| 📊 System Monitor | Optional: CPU / memory / GPU usage (built-in, auto-managed by the plugin) |
-| ✅ Smart Confirm | Detects "please confirm" dialogs and bubbles a reminder; bubble disappears when handled |
-| 💤 Sleep State Machine | 3 min idle → yawn → 💤 → sleepy loop → wake-up animation when you return |
+| 💤 Sleep State Machine | 3 min idle → yawn → 💤 → sleepy loop → wake-up when you return |
 
 ### 📦 Installation
 
@@ -159,8 +201,6 @@ Jingbao is a **warm-hearted little maid** — much more than an animated sticker
 Set-ExecutionPolicy -Scope Process Bypass
 .\install.ps1
 ```
-
-The script copies the plugin, deploys assets (including voice files), registers the plugin, and tells you to restart dsh web.
 
 **Option 2: Manual install**
 
@@ -183,7 +223,7 @@ The script copies the plugin, deploys assets (including voice files), registers 
 
 ### 📊 System Monitor
 
-Right-click the pet → enable "System Monitor". **No extra service needed** — monitoring is built into the plugin and auto-managed with DSH lifecycle (CPU / memory / GPU; GPU requires an NVIDIA GPU).
+Right-click the pet → enable "System Monitor". **No extra service needed** — built into the plugin (CPU / memory / GPU; GPU requires an NVIDIA GPU).
 
 ### 🎮 Controls
 
