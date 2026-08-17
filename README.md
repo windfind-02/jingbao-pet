@@ -25,7 +25,18 @@ Powered by **MiniMax H3 image-to-video** real smooth animations (seamless first/
 
 > 💡 这是很多"动图桌宠"做不到的——鲸宝是**真正会主动提醒你**的小女仆！
 
-### 📊 2. 三参数实时监控 — 你的任务到底还在不在跑，一眼就知道！
+### 🎉 2. 任务完成 · 语音播报 — 跑完任务第一时间告诉你！
+
+当你的 AI 任务（对话回答 / 生成 / 分析…）**结束的那一刻**，鲸宝立刻用软萌声线播报**「主人，任务完成啦！」**：
+
+- **自动感知任务结束**：任务结束后页面上会出现"用时 X秒 · 首 token X秒 · X tok/s"的数据栏，鲸宝检测到就播报
+- **第一时间提醒**：不用一直盯着页面等结果，鲸宝会用声音告诉你"搞定了！"
+- **三种完成台词**：随机播报（"主人，任务完成啦！" / "主人，任务已经完成了哦~" / "主人，快来看看任务完成的怎么样吧~"）
+- **精准不误报**：只认"任务真正结束"的标记，刷新页面、历史消息都不会乱报
+
+> 💡 挂机等结果的时候，鲸宝就是你的"任务完成闹钟"——听到声音再回来看，效率翻倍！
+
+### 📊 3. 三参数实时监控 — 你的任务到底还在不在跑，一眼就知道！
 
 右键菜单一键开启系统监控，鲸宝随身显示 **CPU / 内存 / GPU** 三个实时占用率：
 
@@ -57,9 +68,11 @@ Powered by **MiniMax H3 image-to-video** real smooth animations (seamless first/
 | 类别 | 功能 |
 |---|---|
 | 🔔 语音确认提醒 | 确认弹窗出现时**语音播报** + 气泡提醒，人不在对话页也能听到，处理完自动安静 |
+| 🎉 任务完成播报 | 任务结束**自动语音播报**「主人，任务完成啦！」，不用盯着页面等结果 |
 | 📊 系统监控 | CPU / 内存 / GPU 三参数实时显示，GPU 占用即任务"心跳"，内置服务自动启停 |
 | 🎬 真动画 | 挥手 / 微笑合十 / 眨眼 / 幸福摇头 / 双手比心 / 打哈欠 / 歪头瞌睡 / 醒来 / 被抓——全部 H3 生成、首尾帧无缝循环 |
-| 🗣️ 语音 | 点击 4 句 + 确认 4 句，专属声线（Qwen3-TTS），气泡与语音同句、瞬时出声不叠加 |
+| 🗣️ 语音 | 点击 4 句 + 确认 4 句 + 任务完成 3 句，专属声线（Qwen3-TTS），气泡与语音同句、瞬时出声不叠加 |
+| 🔊 语音开关 | 右键菜单可分别开关：需求确认播报 / 点击互动播报 / 任务完成播报 |
 | 🖱️ 交互 | 点击摇头/比心+爱心特效、按住拖拽（被抓动画）、滚轮缩放（128~512）、右键菜单 |
 | 💬 情感陪伴 | 整点报时（每小时不同台词）、节日祝福、劝休息、深夜关怀、待机卖萌 |
 | 💤 瞌睡状态机 | 3 分钟无操作 → 打哈欠 → 头顶💤 → 歪头瞌睡循环 → 主人回来播醒来动画 |
@@ -132,6 +145,7 @@ dsh web
 - **待机卖萌**：随机冒泡（"主人辛苦啦，摸摸鲸宝吧～"等）
 - **点击语音**："呀！主人戳到鲸宝啦～"、"主人最喜欢鲸宝了对吧？"等 4 句
 - **确认语音**："主人主人，这里需要你确认一下哦～"等 4 句
+- **任务完成语音**："主人，任务完成啦！"、"主人，任务已经完成了哦~"、"主人，快来看看任务完成的怎么样吧~" 3 句
 - **整点报时**：每小时不同台词，贴合国内作息（9-12 上班 / 12-14 午休 / 14-18 下午班）
 - **节日祝福**：新年、情人节、儿童节、中秋、国庆、平安夜、圣诞、跨年
 - **关怀**：连续活跃 50 分钟劝休息、深夜 22 点后提醒睡觉
@@ -160,7 +174,18 @@ When a "please confirm" dialog pops up, Jingbao doesn't just show a bubble — s
 
 > 💡 Most "animated sticker" pets can't do this — Jingbao is a maid who **actively reminds you**!
 
-### ⭐ Killer Feature 2: Live CPU / Memory / GPU Monitor — Know Instantly If Your Task Is Still Running!
+### ⭐ Killer Feature 2: Task Completion Voice Alert — She Tells You the Moment Your Task Finishes!
+
+The instant your AI task (chat reply / generation / analysis…) **finishes**, Jingbao speaks **"Master, the task is done!"** in her cute voice:
+
+- **Auto-detects task completion**: when the "time used · first token · tok/s" metrics bar appears after a task, Jingbao detects it and announces
+- **No need to stare at the page** — Jingbao's voice tells you "it's done!" while you do other things
+- **3 random completion lines**: "主人，任务完成啦！" / "主人，任务已经完成了哦~" / "主人，快来看看任务完成的怎么样吧~"
+- **Precise, no false alarms**: only triggers on real task-end markers — page refreshes and old messages never cause false announcements
+
+> 💡 Waiting for a long task? Jingbao is your "task-done alarm" — come back when you hear her voice!
+
+### ⭐ Killer Feature 3: Live CPU / Memory / GPU Monitor — Know Instantly If Your Task Is Still Running!
 
 Enable the system monitor from the right-click menu, and Jingbao shows **CPU / Memory / GPU** usage right beside her:
 
@@ -173,7 +198,7 @@ Enable the system monitor from the right-click menu, and Jingbao shows **CPU / M
 ### 🐳 What Can Jingbao Do?
 
 - **Really moves**: waving, smiling with hands clasped, blinking, happy head-shake, hand-heart gesture, yawning, dozing off, waking up, being grabbed — all high-quality MiniMax H3 animations
-- **Talks to you**: speaks with her own voice (Qwen3-TTS) on click / confirmation prompts — bubble text and voice always match
+- **Talks to you**: speaks with her own voice (Qwen3-TTS) on click / confirm prompts / task completion — bubble text and voice always match
 - **Reads the room**: if you're away for 3 minutes she starts yawning and dozing with a 💤; the moment you're back, she wakes up to greet you
 - **Cares about you**: hourly time announcements, holiday greetings, rest reminders, late-night care
 - **Responds to you**: click for head-shake / heart gesture with floating hearts, drag to watch her struggle
@@ -186,9 +211,11 @@ Enable the system monitor from the right-click menu, and Jingbao shows **CPU / M
 | Category | Feature |
 |---|---|
 | 🔔 Voice Confirm Alerts | **Spoken alerts** + bubble for confirm dialogs — hear it even away from the page, auto-quiet when handled |
+| 🎉 Task-Done Announcement | **Voice announcement** the moment a task finishes — no need to watch the page |
 | 📊 System Monitor | Live CPU / Memory / GPU — GPU usage is your task "heartbeat", built-in & auto-managed |
 | 🎬 Real Animations | Wave / smile / blink / head-shake / hand-heart / yawn / sleepy loop / wake-up / grabbed — all H3-generated, seamless |
-| 🗣️ Voice | 4 click lines + 4 confirm lines, own voice (Qwen3-TTS), synced with bubble text |
+| 🗣️ Voice | 4 click lines + 4 confirm lines + 3 task-done lines, own voice (Qwen3-TTS), synced with bubble text |
+| 🔊 Voice Toggles | Right-click menu: independently toggle confirm / click / task-done voice |
 | 🖱️ Interaction | Click → head-shake / heart + floating hearts, drag → grabbed, scroll → resize (128–512), right-click menu |
 | 💬 Companionship | Hourly greetings, holiday wishes, rest reminders, late-night care, idle chat |
 | 💤 Sleep State Machine | 3 min idle → yawn → 💤 → sleepy loop → wake-up when you return |
