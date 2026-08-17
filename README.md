@@ -17,7 +17,7 @@ Powered by **MiniMax H3 image-to-video** real smooth animations (seamless first/
 
 ### 🔔 1. 需求确认 · 语音播报提醒 — 人不在对话页也能听到！
 
-当页面弹出「需要确认」的请求框时，鲸宝不仅会冒气泡提醒，还会**用她软萌的克隆声线语音播报**！这意味着：
+当页面弹出「需要确认」的请求框时，鲸宝不仅会冒气泡提醒，还会**用她软萌的专属声线语音播报**！这意味着：
 
 - **你不在对话页也能知道有需求在等你确认** —— 挂机跑任务、切到别的窗口，都绝不会错过关键确认
 - **处理完弹窗，气泡和语音立即安静下来**，不会一直吵你
@@ -44,7 +44,7 @@ Powered by **MiniMax H3 image-to-video** real smooth animations (seamless first/
 鲸宝是一个**有温度的小女仆**，不只是个动图：
 
 - **会真的动起来**：挥手、微笑合十、眨眼、幸福摇头、双手比心、打哈欠、歪头瞌睡、醒来、被抓住——全部是 H3 生成的高清动画，动作流畅自然
-- **会说话**：点击 / 确认需求时用专属克隆声线说话，气泡与语音同一句，软萌贴心
+- **会说话**：点击 / 确认需求时用专属声线说话，气泡与语音同一句，软萌贴心
 - **会察言观色**：你离开 3 分钟它就开始犯困打哈欠、头顶飘💤打瞌睡；你一回来它立刻醒来迎接
 - **会关心你**：整点报时（每小时台词都不同）、节日祝福、连续忙 50 分钟劝你休息、深夜 22 点后提醒别熬夜
 - **会回应你**：点击它摇头/比心 + 冒出爱心、按住它挣扎着被拖走、准备打字时它好奇地问你要说什么
@@ -59,7 +59,7 @@ Powered by **MiniMax H3 image-to-video** real smooth animations (seamless first/
 | 🔔 语音确认提醒 | 确认弹窗出现时**语音播报** + 气泡提醒，人不在对话页也能听到，处理完自动安静 |
 | 📊 系统监控 | CPU / 内存 / GPU 三参数实时显示，GPU 占用即任务"心跳"，内置服务自动启停 |
 | 🎬 真动画 | 挥手 / 微笑合十 / 眨眼 / 幸福摇头 / 双手比心 / 打哈欠 / 歪头瞌睡 / 醒来 / 被抓——全部 H3 生成、首尾帧无缝循环 |
-| 🗣️ 语音 | 点击 4 句 + 确认 4 句，克隆声线（Qwen3-TTS），气泡与语音同句、瞬时出声不叠加 |
+| 🗣️ 语音 | 点击 4 句 + 确认 4 句，专属声线（Qwen3-TTS），气泡与语音同句、瞬时出声不叠加 |
 | 🖱️ 交互 | 点击摇头/比心+爱心特效、按住拖拽（被抓动画）、滚轮缩放（128~512）、右键菜单 |
 | 💬 情感陪伴 | 整点报时（每小时不同台词）、节日祝福、劝休息、深夜关怀、待机卖萌 |
 | 💤 瞌睡状态机 | 3 分钟无操作 → 打哈欠 → 头顶💤 → 歪头瞌睡循环 → 主人回来播醒来动画 |
@@ -152,7 +152,7 @@ dsh web
 
 ### ⭐ Killer Feature 1: Voice Alert for Confirmation Prompts — Hear It Even When You're Not on the Page!
 
-When a "please confirm" dialog pops up, Jingbao doesn't just show a bubble — she **speaks it aloud in her cute cloned voice**! That means:
+When a "please confirm" dialog pops up, Jingbao doesn't just show a bubble — she **speaks it aloud in her cute voice**! That means:
 
 - **You'll know a confirmation is waiting even if you're not looking at the page** — while your task runs in the background or you're in another window, you'll never miss a critical confirmation
 - The moment you handle it, the bubble and voice go quiet instantly
@@ -173,7 +173,7 @@ Enable the system monitor from the right-click menu, and Jingbao shows **CPU / M
 ### 🐳 What Can Jingbao Do?
 
 - **Really moves**: waving, smiling with hands clasped, blinking, happy head-shake, hand-heart gesture, yawning, dozing off, waking up, being grabbed — all high-quality MiniMax H3 animations
-- **Talks to you**: speaks with her own cloned voice (Qwen3-TTS) on click / confirmation prompts — bubble text and voice always match
+- **Talks to you**: speaks with her own voice (Qwen3-TTS) on click / confirmation prompts — bubble text and voice always match
 - **Reads the room**: if you're away for 3 minutes she starts yawning and dozing with a 💤; the moment you're back, she wakes up to greet you
 - **Cares about you**: hourly time announcements, holiday greetings, rest reminders, late-night care
 - **Responds to you**: click for head-shake / heart gesture with floating hearts, drag to watch her struggle
@@ -188,7 +188,7 @@ Enable the system monitor from the right-click menu, and Jingbao shows **CPU / M
 | 🔔 Voice Confirm Alerts | **Spoken alerts** + bubble for confirm dialogs — hear it even away from the page, auto-quiet when handled |
 | 📊 System Monitor | Live CPU / Memory / GPU — GPU usage is your task "heartbeat", built-in & auto-managed |
 | 🎬 Real Animations | Wave / smile / blink / head-shake / hand-heart / yawn / sleepy loop / wake-up / grabbed — all H3-generated, seamless |
-| 🗣️ Voice | 4 click lines + 4 confirm lines, cloned voice (Qwen3-TTS), synced with bubble text |
+| 🗣️ Voice | 4 click lines + 4 confirm lines, own voice (Qwen3-TTS), synced with bubble text |
 | 🖱️ Interaction | Click → head-shake / heart + floating hearts, drag → grabbed, scroll → resize (128–512), right-click menu |
 | 💬 Companionship | Hourly greetings, holiday wishes, rest reminders, late-night care, idle chat |
 | 💤 Sleep State Machine | 3 min idle → yawn → 💤 → sleepy loop → wake-up when you return |
