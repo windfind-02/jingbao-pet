@@ -31,7 +31,8 @@ window.__ModuleLoader__.load({
 		const FRAMES = {
 			idle: "/pet.png?v=2",        // 待机站姿（H3 动画首帧，与动画角色大小一致）
 			wave: "/pet_wave.png",   // 挥手（静态帧，动图缺失时的兜底）
-			sleepy: "/pet_sleepy.png" // 打瞌睡（闭眼）
+			sleepy: "/pet_sleepy.png", // 打瞌睡（闭眼）
+			sleepyF0: "/pet_sleepy_f0.png?v=1" // 瞌睡动图首帧静帧（与 pet_sleepy.webp 首帧像素一致，用于动图切换瞬间无缝垫底）
 		};
 		/** 动图（透明底 WebP 循环动画，真·动作；缺失时自动退回对应静态帧）。 */
 		const ANIMS = {
@@ -676,6 +677,45 @@ window.__ModuleLoader__.load({
 			// 3e. 💤 睡眠特效（瞌睡阶段持续显示，打断时隐藏）
 			function showSleepFx() { sleepFx.style.display = "block"; }
 			function hideSleepFx() { sleepFx.style.display = "none"; }
+			// 3e2. 预解码动图到内存（decode 完成后切换 src 无需现场下载+解码，避免切换瞬间闪帧）
+			//      哈欠播放期间预解码瞌睡/唤醒动图，7 秒窗口足够 9.8MB 大动画解码完毕
+			function predecode(name) {
+				const src = ANIMS[name];
+				if (!src) return;
+				try {
+					const img = new Image();
+					img.src = src;
+					if (img.decode) img.decode().catch(() => {});
+				} catch (e) { /* 忽略 */ }
+			}
+			// 3e3. 动图无缝切换：当前已垫同姿势静帧（如瞌睡首帧），待目标动图解码就绪后再替换 src，
+			//      避免「src 已换但新帧未解码」导致的空白/闪帧。onDone 在动画播完后回调（仅 wakeup 用）。
+			function switchToLoop(name, onDone) {
+				const src = ANIMS[name];
+				if (!src) { if (onDone) onDone(); return; }
+				const img = new Image();
+				img.src = src;
+				const duration = name === "wakeup" ? WAKEUP_MS : 0;
+				const done = () => {
+					// 状态守卫：解码期间被打断（如又点了唤醒/进入其他动画）就不替换了
+					if (name === "sleepy" && sleepyPhase !== "sleeping") return;
+					if (name === "wakeup" && sleepyPhase !== "waking") return;
+					if (animTimer) { clearTimeout(animTimer); animTimer = null; }
+					animImg.src = src;
+					currentFrame = "anim:" + name;
+					showAnim();
+					if (onDone && duration) {
+						animTimer = setTimeout(() => {
+							animTimer = null;
+							onDone();
+						}, duration);
+					}
+				};
+				try {
+					if (img.decode) img.decode().then(done).catch(done);
+					else img.onload = done;
+				} catch (e) { done(); }
+			}
 			// 3f. 随机动画/卖萌计时器的暂停与恢复（需求③）
 			function stopIdleTimer() {
 				idlePaused = true;
@@ -691,10 +731,20 @@ window.__ModuleLoader__.load({
 				sleepyFlag = true;
 				sleepyPhase = "yawn";
 				stopIdleTimer();   // 哈欠播放那一刻停止随机动画计时器
+				// 哈欠 7 秒播放期间预解码瞌睡/唤醒动图，切换时无需现场下载+解码（sleepy 380 帧 9.8MB，不预解码必闪帧）
+				predecode("sleepy");
+				predecode("wakeup");
 				showBubble("呼…主人不在，鲸宝打个盹…", 3000);
 				playAnimThen("yawn", YAWN_MS, () => {
+					// 哈欠期间若已被唤醒（点击），不再进入瞌睡
+					if (sleepyPhase !== "yawn") return;
 					sleepyPhase = "sleeping";
-					playAnimLoop("sleepy");   // 循环歪头闭眼瞌睡
+					// 无缝衔接：先垫瞌睡动图首帧静帧（与动图首帧像素一致，也≈哈欠末帧），
+					// 等 9.8MB 大动图解码就绪后再替换成循环动画，全程画面不空白、姿势不跳变
+					showStatic();
+					staticImg.src = FRAMES.sleepyF0;
+					currentFrame = "sleepyF0";
+					switchToLoop("sleepy");
 					setTimeout(() => {
 						if (sleepyPhase === "sleeping") showSleepFx();  // 1 秒后 💤
 					}, 1000);
@@ -705,7 +755,11 @@ window.__ModuleLoader__.load({
 				sleepyFlag = false;
 				sleepyPhase = "waking";
 				hideSleepFx();
-				playAnimThen("wakeup", WAKEUP_MS, () => {
+				// 无缝衔接：先垫瞌睡首帧静帧（当前画面姿势），wakeup 动图解码就绪后无缝替换
+				showStatic();
+				staticImg.src = FRAMES.sleepyF0;
+				currentFrame = "sleepyF0";
+				switchToLoop("wakeup", () => {
 					sleepyPhase = "none";
 					stopAnim();  // 回到正常待机
 					setTimeout(() => resumeIdleTimer(), 7000);  // 打断后 7 秒恢复计时器
@@ -994,13 +1048,15 @@ window.__ModuleLoader__.load({
 			}
 			let lastHandledBtns = [];  // 刚处理完的确认弹窗的按钮元素（残留识别：同一元素再出现 = 残留）
 			let lastHandledAt = 0;
-			const CONFIRM_HANDLE_WINDOW = 1500;  // 处理完 1.5s 内，同一按钮元素视为残留
+			let lastHandledKey = null;  // 刚处理完的弹窗特征 key（React 重渲染会重建按钮元素、元素 === 失效，用 key 兜底）
+			const CONFIRM_HANDLE_WINDOW = 1500;  // 处理完 1.5s 内，同一按钮元素/同 key 视为残留
 			function finishConfirm() {
 				if (!pendingConfirm) return;
 				// 记录刚处理弹窗的按钮元素（React 关闭动画/重渲染时这些元素可能还在 → 识别为残留）
 				lastHandledBtns = [];
 				if (pendingConfirm.yesBtn) lastHandledBtns.push(pendingConfirm.yesBtn);
 				if (pendingConfirm.noBtn) lastHandledBtns.push(pendingConfirm.noBtn);
+				lastHandledKey = confirmKey(pendingConfirm);  // 同 key 兜底（按钮被 React 重建时用）
 				lastHandledAt = Date.now();
 				pendingConfirm = null;
 				bubbleActions.classList.remove("show");
@@ -1075,17 +1131,25 @@ window.__ModuleLoader__.load({
 								((info.yesBtn && lastHandledBtns.indexOf(info.yesBtn) !== -1) ||
 								 (info.noBtn && lastHandledBtns.indexOf(info.noBtn) !== -1));
 							if (isHandledBtn) return;
+							// React 重建防线：刚处理完的弹窗（窗口内）若出现**同 key** 信号 → 大概率是同一弹窗
+							// 重渲染产生的新按钮元素（元素 === 比对会失效）→ 用更长验证窗口甄别：
+							//   残留（重渲染中间态，即将随弹窗关闭移除）→ 1s 后验证不在 → 不播
+							//   真新需求（稳定存在）→ 1s 后验证还在 → 播（不误杀，区别于 README 旧失败方案）
+							const isRecentHandledKey = lastHandledKey && nowH - lastHandledAt < CONFIRM_HANDLE_WINDOW &&
+								key && key === lastHandledKey;
 							// 残留窗口已过期：清空按钮引用（不持有 DOM 引用，无内存残留）
 							if (lastHandledBtns.length > 0 && nowH - lastHandledAt >= CONFIRM_HANDLE_WINDOW) {
 								lastHandledBtns = [];
 								lastHandledAt = 0;
+								lastHandledKey = null;
 							}
-							// 延迟验证法：信号出现后 400ms 再看"信号自己的按钮是否还在页面上"。
+							// 延迟验证法：信号出现后（默认 400ms，同 key 残留放宽到 1s）再看"信号自己的按钮是否还在页面上"。
 							//   - 真新需求：弹窗稳定存在 → 按钮还在 → 播（覆盖播放）
-							//   - React 残留：按钮被移除/替换 → 400ms 后不在 → 不播
+							//   - React 残留：按钮被移除/替换 → 验证时不在 → 不播
 							// 注意：只验证信号自己的按钮，**不检查页面其他按钮**（新弹窗的按钮会导致残留误判）
 							if (pendingAnnounce) { clearTimeout(pendingAnnounce); pendingAnnounce = null; }
 							const schedInfo = info;
+							const verifyDelay = isRecentHandledKey ? 1000 : 400;
 							pendingAnnounce = setTimeout(() => {
 								pendingAnnounce = null;
 								// 验证：信号自己的按钮还在页面上吗？
@@ -1102,7 +1166,7 @@ window.__ModuleLoader__.load({
 									lastAnnouncedKey = key;
 									showConfirmBubble(schedInfo);
 								}
-							}, 400);
+							}, verifyDelay);
 							return;
 						}
 					}
