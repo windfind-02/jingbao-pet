@@ -1124,82 +1124,120 @@ window.__ModuleLoader__.load({
 				}
 			}, true);
 
-			// 9b. 任务完成播报：监听「新插入」的任务结束标记 → 播报任务完成
-			// DSH 任务结束后会**新插入**产物数据栏，特征是「固定词 + 变化数字 + 固定词」：
-			//   "用时 37秒" / "耗时 2.1秒" / "首 token 2.1秒" / "154 tok/s"
-			// 用 MutationObserver 只看**新增节点**：刷新页面时历史消息不算新增，
-			// 只有任务完成时新插入的数据栏才算 → 不会刷新就误播
+			// 9b. 任务完成播报（v4 精准化）：只认「回合结束页脚」→ 播报任务完成
+			// DSH 每个对话回合**真正结束**（turn/end）时，会**新插入**一个回合页脚
+			// `[data-turn-tail]`，内含「用时 X秒 · 首 token X秒 · X tok/s」指标栏。
+			// ⚠️ v3 误报根因：旧实现扫描页面上**任意**新增节点里的指标句式，而这些句式
+			//   还会出现在：① 会话统计栏（输入框上方 StatsLine 的 "X tok/s"，任务第一步
+			//   完成后就出现、任务还在跑）；② 后台任务卡片 title="耗时 X秒"（子任务完成）；
+			//   ③ 子代理卡"总活跃耗时"；④ 轨迹面板 "TTFT / X tok/s"。
+			//   → 任务没结束就播报。v4 只认 [data-turn-tail]（回合结束页脚），排除误报。
 			let lastTaskDoneAt = 0;
 			const TASK_DONE_COOLDOWN = 20000;  // 完成后 20 秒内不重复播报
 			// 完整句式：固定词 + 数字 + 固定词（数字可变）
 			const TASK_METRIC_RE = /(用时|耗时|消耗|共花费)\s*[0-9.]+(秒|s|分钟|分)|首\s?token\s*[0-9.]+(秒|s)|[0-9.]+\s*tok\/?s|[0-9.]+\s*tokens?\/s/i;
-			/** 判断节点文本是否含任务结束句式（含 title/aria-label 隐藏参数）。 */
-			function nodeHasDoneMarker(node) {
+			/** 已播报过的回合页脚 turn id（同一回合不重复播；页面生命周期内保留）。 */
+			const seenTurnTails = new Set();
+			let pendingTurnTailCheck = null;   // 待验证的回合页脚（延迟判断是否批量重建）
+			const BULK_THRESHOLD = 3;          // 0.6s 内出现 ≥3 个新页脚 = 历史批量重建（切会话）
+			const BULK_VERIFY_MS = 600;        // 延迟验证窗口
+			/** 从节点向上/向下定位「回合结束页脚」[data-turn-tail]，找不到返回 null。 */
+			function findTurnTail(node) {
 				try {
-					if (!node || node.nodeType !== 1) return false;
-					if (node.closest && node.closest("#jingbao-pet")) return false;  // 排除桌宠自身
-					// 节点自身文本（聚合子元素）
-					const t = (node.textContent || "").trim();
-					if (t && t.length <= 800 && TASK_METRIC_RE.test(t)) return true;
-					// 直接检查 title/aria-label 隐藏参数（鼠标移上去看到的）
-					if (node.getAttribute) {
-						const title = node.getAttribute("title") || node.getAttribute("aria-label") || "";
-						if (title && title.length <= 200 && TASK_METRIC_RE.test(title)) return true;
-					}
-					// 新增节点可能是整条消息（含"用时"的子元素在深层）：从它下面找含句式的最深元素
+					if (!node || node.nodeType !== 1) return null;
+					if (node.closest && node.closest("#jingbao-pet")) return null;  // 排除桌宠自身
+					const up = node.closest ? node.closest("[data-turn-tail]") : null;
+					if (up) return up;
 					if (node.querySelectorAll) {
-						const hits = node.querySelectorAll("[title], [aria-label], span, div, time");
-						const cap = Math.min(hits.length, 200);
-						for (let i = 0; i < cap; i += 1) {
-							const el = hits[i];
-							const tt = (el.textContent || "").trim();
-							if (tt && tt.length <= 120 && TASK_METRIC_RE.test(tt)) return true;
-							const at = el.getAttribute && (el.getAttribute("title") || el.getAttribute("aria-label") || "");
-							if (at && at.length <= 120 && TASK_METRIC_RE.test(at)) return true;
-						}
+						const down = node.querySelector("[data-turn-tail]");
+						if (down) return down;
+					}
+				} catch (e) { /* ignore */ }
+				return null;
+			}
+			/** 回合页脚是否含任务结束指标句式（用时/首 token/tok/s）。 */
+			function turnTailHasMetric(tt) {
+				try {
+					const t = (tt.textContent || "").trim();
+					if (t && t.length <= 800 && TASK_METRIC_RE.test(t)) return true;
+					if (tt.getAttribute) {
+						const title = tt.getAttribute("title") || tt.getAttribute("aria-label") || "";
+						if (title && title.length <= 200 && TASK_METRIC_RE.test(title)) return true;
 					}
 				} catch (e) { /* ignore */ }
 				return false;
 			}
-			// 任务结束标记 MutationObserver（全局单例，apply 重入时先断开旧的）
-			// 同时监听 childList（新增节点）和 characterData（文本更新）——
-			// DSH 可能"先插入空数据栏再填充文本"（更新已有文本节点），两种都覆盖
+			/** 处理一个回合页脚：判重 → 批量保护 → 播报。 */
+			function handleTurnTail(tt) {
+				if (!tt) return;
+				let id = null;
+				try { id = tt.getAttribute && tt.getAttribute("data-turn-tail"); } catch (e) { /* ignore */ }
+				if (id === null || id === "") id = "?";
+				if (seenTurnTails.has(id)) return;   // 同一回合不重复播
+				// 批量渲染保护（延迟验证法，与确认弹窗同思路）：
+				// 新页脚出现后等 0.6s —— 若这段时间又冒出多个新页脚 = 切换会话/历史重建，
+				// 全部标记已见不播；若只有它一个 = 真·新回合完成 → 播报
+				if (pendingTurnTailCheck) { clearTimeout(pendingTurnTailCheck); pendingTurnTailCheck = null; }
+				pendingTurnTailCheck = setTimeout(() => {
+					pendingTurnTailCheck = null;
+					const newIds = [];
+					try {
+						document.querySelectorAll("[data-turn-tail]").forEach((el) => {
+							let eid = null;
+							try { eid = el.getAttribute && el.getAttribute("data-turn-tail"); } catch (e2) { /* ignore */ }
+							if (eid === null || eid === "") eid = "?";
+							if (!seenTurnTails.has(eid)) newIds.push(eid);
+						});
+					} catch (e) { /* ignore */ }
+					if (newIds.length >= BULK_THRESHOLD) {
+						// 历史批量重建（切换会话等）：全部标记已见，不播报
+						newIds.forEach((eid) => seenTurnTails.add(eid));
+						return;
+					}
+					// 正常：只播「最新的回合页脚」（含指标才播）
+					try {
+						const all = document.querySelectorAll("[data-turn-tail]");
+						const last = all[all.length - 1];
+						if (last && turnTailHasMetric(last)) announceTaskDone();
+					} catch (e) { /* ignore */ }
+					newIds.forEach((eid) => seenTurnTails.add(eid));
+				}, BULK_VERIFY_MS);
+			}
+			// 回合结束页脚 MutationObserver（全局单例，apply 重入时先断开旧的）
+			// 同时监听 childList（新增页脚）和 characterData（页脚文本填充）——
+			// DSH 可能"先插入空页脚再填充指标文本"，两种都覆盖
 			const jbDoneMO = new MutationObserver((muts) => {
 				// 预热期：页面加载后 3 秒内不播报（等初始 DOM 稳定，避免把已有历史当新任务）
 				if (Date.now() < jbDoneReadyAt) return;
 				for (let i = 0; i < muts.length; i += 1) {
 					const m = muts[i];
-					// 1. 新增节点（任务完成后新插入的数据栏/消息）
+					// 1. 新增节点：可能是新回合页脚（或其祖先/后代）
 					const added = m.addedNodes;
 					for (let j = 0; j < added.length; j += 1) {
-						if (nodeHasDoneMarker(added[j])) {
-							announceTaskDone();
-							return;
-						}
+						const tt = findTurnTail(added[j]);
+						if (tt) handleTurnTail(tt);
 					}
-					// 2. 文本更新（characterData）：检查目标文本节点的父元素（数据栏填充内容）
+					// 2. 文本更新（characterData）：页脚内部指标文本填充
 					if (m.type === "characterData" && m.target && m.target.parentElement) {
-						if (nodeHasDoneMarker(m.target.parentElement)) {
-							announceTaskDone();
-							return;
-						}
+						const tt = findTurnTail(m.target.parentElement);
+						if (tt) handleTurnTail(tt);
 					}
 				}
 			});
-			// 触发一次任务完成播报（带 20s 冷却 + 等文字动画播完）
+			// 触发一次任务完成播报（带 20s 冷却）
 			function announceTaskDone() {
 				const now = Date.now();
 				if (now - lastTaskDoneAt >= TASK_DONE_COOLDOWN) {
 					lastTaskDoneAt = now;
 					lastActivity = Date.now();  // 播报也算活跃，不打断瞌睡判定
-					scheduleDoneAnnounce();  // 等文字动画播完再播报
+					scheduleDoneAnnounce();
 				}
 			}
 			if (window.__jbDoneMO) { try { window.__jbDoneMO.disconnect(); } catch (e) { /* 忽略 */ } }
 			window.__jbDoneMO = jbDoneMO;
 			const jbDoneReadyAt = Date.now() + 3000;  // 3 秒预热期
 			jbDoneMO.observe(document.body, { childList: true, characterData: true, subtree: true });
-			// 任务完成播报：检测到结束标记后**立即**播报（检测很准，无需等动画/延迟）
+			// 任务完成播报：检测到回合页脚后播报（0.6s 延迟验证期已排除批量重建）
 			function scheduleDoneAnnounce() {
 				const dIdx = Math.floor(Math.random() * DONE_LINES.length);
 				showBubble(DONE_LINES[dIdx], 4000);
@@ -1211,23 +1249,21 @@ window.__ModuleLoader__.load({
 				showBubble(DONE_LINES[dIdx], 4000);
 				playVoiceIndex("done", dIdx);
 			};
-			// 调试钩子：扫描页面上已存在的任务结束标记，返回检测状态（排查用）
+			// 调试钩子：列出页面上所有「回合页脚」及其指标匹配情况（v4 排查用）
 			window.__jbTaskScan = () => {
 				const hits = [];
 				try {
-					document.querySelectorAll("span, div, p, [title], [aria-label]").forEach((el) => {
-						if (el.closest && el.closest("#jingbao-pet")) return;
-						const t = (el.textContent || "").trim();
-						if (t && t.length <= 120 && TASK_METRIC_RE.test(t)) {
-							hits.push({ type: "metric", text: t.slice(0, 60), cls: (el.className || "").toString().slice(0, 50), tag: el.tagName });
-						}
-						const at = el.getAttribute && (el.getAttribute("title") || el.getAttribute("aria-label") || "");
-						if (at && at.length <= 120 && TASK_METRIC_RE.test(at)) {
-							hits.push({ type: "attr", text: at.slice(0, 60), tag: el.tagName });
-						}
+					document.querySelectorAll("[data-turn-tail]").forEach((el) => {
+						const t = (el.textContent || "").trim().replace(/\s+/g, " ").slice(0, 120);
+						hits.push({
+							turn: (el.getAttribute && el.getAttribute("data-turn-tail")) || "?",
+							metric: TASK_METRIC_RE.test(t),
+							text: t,
+							cls: (el.className || "").toString().slice(0, 40)
+						});
 					});
 				} catch (e) { /* ignore */ }
-				return { hits };
+				return { count: hits.length, hits };
 			};
 
 			// 10. 待机随机卖萌（瞌睡时冒 zzz，正常时冒卖萌语）
