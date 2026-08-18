@@ -21,6 +21,7 @@ Powered by **MiniMax H3 image-to-video** real smooth animations (seamless first/
 
 - **你不在对话页也能知道有需求在等你确认** —— 挂机跑任务、切到别的窗口，都绝不会错过关键确认
 - **处理完弹窗，气泡和语音立即安静下来**，不会一直吵你
+- **智能防重复播报**：同一个弹窗只提醒一次，你处理完绝不会再重复播一遍——连 DSH 弹窗关闭时的 React 重渲染残留都能精准识别
 - 智能识别各种确认框（同意 / 允许 / 批准 / 取消…），自动判断你已处理
 
 > 💡 这是很多"动图桌宠"做不到的——鲸宝是**真正会主动提醒你**的小女仆！
@@ -170,6 +171,7 @@ When a "please confirm" dialog pops up, Jingbao doesn't just show a bubble — s
 
 - **You'll know a confirmation is waiting even if you're not looking at the page** — while your task runs in the background or you're in another window, you'll never miss a critical confirmation
 - The moment you handle it, the bubble and voice go quiet instantly
+- **Smart anti-duplicate alerts**: each dialog is announced only once — never re-announced after you handle it, even when DSH's React re-renders its closing dialog
 - She smartly recognizes various confirm dialogs (Agree / Allow / Approve / Cancel…) and detects when you've handled them
 
 > 💡 Most "animated sticker" pets can't do this — Jingbao is a maid who **actively reminds you**!
