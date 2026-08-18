@@ -1,4 +1,4 @@
-# 🐳 鲸宝桌宠（DSH 插件版） / Jingbao Desktop Pet (DSH Plugin)
+# 🐳 鲸宝语音桌宠（DSH 插件版） / Jingbao Voice Pet (DSH Plugin)
 
 > 📝 **本文档由鲸宝（AI 助手）亲手编写** 🐳
 > 📝 **Written by Jingbao (AI assistant)** 🐳
