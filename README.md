@@ -278,7 +278,7 @@ Right-click the pet → enable "System Monitor". **No extra service needed** —
 ## 📄 许可证 / License
 
 - 代码 / Code：MIT License (see `LICENSE`)
-- 形象素材 / Character art：AI-generated (Krea 2 + MiniMax H3), open-sourced with the plugin, please keep the attribution `@jingbao-pet`
+- 形象素材 / Character art：AI-generated (Krea 2 + MiniMax H3), open-sourced with the plugin, please keep the attribution `@jingbao-voice-pet`
 
 ## 🙏 致谢 / Credits
 
