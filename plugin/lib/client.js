@@ -12,17 +12,34 @@ window.__ModuleLoader__.load({
 		// 产生「双 MutationObserver + 双语音池」→ 确认弹窗触发两条语音同时播放
 		let jbVoiceCache = null;     // 唯一的语音 Audio 池
 		let jbConfirmMO = null;      // 唯一的确认弹窗观察器
+		let jbAskMO = null;          // 唯一的提问框观察器
+		let jbDoneMO = null;         // 唯一的回合页脚（任务完成）观察器
+		let jbActiveApplyId = 0;     // 当前生效的 apply 实例代际号（旧实例残留路径禁止播报）
 		let jbApplied = false;       // 是否已初始化过
-		/** 停掉语音池里所有正在播的 Audio（全局唯一池，跨 apply 实例也互斥）。 */
+		/** 停掉语音池里所有 Audio（无脑 pause：play() 异步启动瞬间 paused 可能仍为 false，
+		 *  靠 !paused 判断会漏停 → 多声音叠加；无脑 pause 已停的 Audio 也无害）。 */
 		function jbStopAllVoices() {
 			try {
 				if (!jbVoiceCache) return;
 				Object.keys(jbVoiceCache).forEach((group) => {
 					(jbVoiceCache[group] || []).forEach((a) => {
-						if (a && !a.paused) {
-							a.pause();
-							a.currentTime = 0;
+						if (a) {
+							try { a.pause(); a.currentTime = 0; } catch (e) { /* ignore */ }
 						}
+					});
+				});
+			} catch (e) { /* 忽略 */ }
+		}
+		/** 把音量条的值实时应用到语音池所有 Audio（正在播的立即变音量）。 */
+		function jbApplyVoiceVolume(monitor) {
+			try {
+				if (!jbVoiceCache) return;
+				const vol = monitor && typeof monitor.voiceVolume === "number"
+					? Math.max(0, Math.min(1, monitor.voiceVolume / 100))
+					: 0.7;
+				Object.keys(jbVoiceCache).forEach((group) => {
+					(jbVoiceCache[group] || []).forEach((a) => {
+						if (a) { try { a.volume = vol; } catch (e) { /* ignore */ } }
 					});
 				});
 			} catch (e) { /* 忽略 */ }
@@ -50,7 +67,8 @@ window.__ModuleLoader__.load({
 		const VOICES = {
 			poke: ["/voice_poke_1.mp3", "/voice_poke_2.mp3", "/voice_poke_3.mp3", "/voice_poke_4.mp3"],
 			confirm: ["/voice_confirm_1.mp3", "/voice_confirm_2.mp3", "/voice_confirm_3.mp3", "/voice_confirm_4.mp3"],
-			done: ["/voice_done_1.mp3", "/voice_done_2.mp3", "/voice_done_3.mp3"]
+			done: ["/voice_done_1.mp3", "/voice_done_2.mp3", "/voice_done_3.mp3"],
+			ask: ["/voice_ask_1.mp3", "/voice_ask_2.mp3", "/voice_ask_3.mp3"]
 		};
 		/** 桌宠显示高度默认值（可缩放范围 128~512）。 */
 		const PET_HEIGHT_DEFAULT = 256;
@@ -85,6 +103,11 @@ window.__ModuleLoader__.load({
 			"主人主人～有件事要你拍板啦！",
 			"主人主人，看这里，需要你确认～",
 			"主人主人~鲸宝在等你的确认呢~"
+		];
+		const ASK_LINES = [
+			"主人主人，有几个方案需要您确认一下哦~",
+			"主人主人，有一个问题想听听您的意见呢~",
+			"主人主人，有一个关键问题需要您的决策哦~"
 		];
 		const POKE_LINES = [
 			"呀！主人戳到鲸宝啦～💕",
@@ -316,6 +339,110 @@ window.__ModuleLoader__.load({
 	box-shadow: inset 0 0 0 1.5px rgba(111, 168, 240, 0.65);
 }
 .jb-menu-item input { accent-color: #6fa8f0; cursor: pointer; }
+/* 播报音量条（人性化设计：小喇叭静音开关 + 可调音量条，默认 70 留出上调空间） */
+.jb-menu-vol {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 2px 8px 8px;
+}
+.jb-menu-mute {
+	background: none;
+	border: none;
+	font-size: 14px;
+	line-height: 1;
+	padding: 3px 5px;
+	cursor: pointer;
+	border-radius: 6px;
+	transition: background 0.15s;
+}
+.jb-menu-mute:hover { background: rgba(111, 168, 240, 0.16); }
+.jb-menu-range {
+	flex: 1;
+	min-width: 0;
+	accent-color: #6fa8f0;
+	cursor: pointer;
+	height: 18px;
+}
+/* 主菜单 + 子菜单（右键菜单瘦身：一级只放主项，细分项收进子菜单，靠屏幕下方也显示得全） */
+.jb-menu-parent {
+	position: relative;
+	display: flex;
+	align-items: center;
+}
+.jb-menu-parent .jb-menu-master {
+	flex: 1;
+	min-width: 0;
+}
+.jb-menu-master-plain { cursor: default; }
+.jb-menu-master-plain:hover { background: transparent; box-shadow: none; }
+.jb-menu-arrow {
+	background: none;
+	border: none;
+	color: #6fa8f0;
+	font-size: 10px;
+	padding: 6px 8px;
+	cursor: pointer;
+	border-radius: 6px;
+	line-height: 1;
+	transition: transform 0.15s;
+}
+.jb-menu-arrow:hover { background: rgba(111, 168, 240, 0.16); }
+.jb-menu-parent:hover > .jb-menu-arrow { transform: rotate(90deg); }
+.jb-menu-sub {
+	display: none;
+	position: absolute;
+	left: 100%;
+	top: -4px;
+	min-width: 168px;
+	background: #ffffff;
+	border: 1px solid rgba(120, 160, 220, 0.3);
+	border-radius: 10px;
+	box-shadow: 0 10px 28px rgba(60, 100, 180, 0.22);
+	padding: 6px;
+	z-index: 10002;
+}
+.jb-menu-sub.flip { left: auto; right: 100%; }  /* 靠近屏幕右边缘时向左弹 */
+/* 子菜单：鼠标悬停主项自动展开（主流软件标准交互） */
+.jb-menu-parent:hover > .jb-menu-sub { display: block; }
+/* 操控手册面板 */
+.jb-help-panel {
+	display: none;
+	position: fixed;
+	z-index: 10003;
+	width: 300px;
+	background: #ffffff;
+	border: 1px solid rgba(120, 160, 220, 0.3);
+	border-radius: 14px;
+	box-shadow: 0 14px 34px rgba(60, 100, 180, 0.26);
+	padding: 14px 16px;
+	font-size: 13px;
+	color: #35506e;
+	user-select: none;
+}
+.jb-help-title {
+	font-weight: 700;
+	font-size: 15px;
+	padding-bottom: 8px;
+	margin-bottom: 8px;
+	border-bottom: 1px solid rgba(120, 160, 220, 0.18);
+}
+.jb-help-body p { margin: 6px 0; line-height: 1.55; }
+.jb-help-body b { color: #4a7fc8; }
+.jb-help-tip { color: #8a9bb8; font-size: 12px; }
+.jb-help-close {
+	margin-top: 10px;
+	width: 100%;
+	padding: 8px 0;
+	border: none;
+	border-radius: 8px;
+	background: linear-gradient(135deg, #6fa8f0, #8fb6f5);
+	color: #ffffff;
+	font-size: 13px;
+	font-weight: 600;
+	cursor: pointer;
+}
+.jb-help-close:hover { filter: brightness(1.06); }
 /* 系统监控面板（桌宠下方，鲸宝主题渐变描边 + 纯白内部 + 随缩放） */
 .jb-monitor {
 	position: absolute;
@@ -488,8 +615,18 @@ window.__ModuleLoader__.load({
 				try { jbConfirmMO.disconnect(); } catch (e) { /* 忽略 */ }
 				jbConfirmMO = null;
 			}
+			if (jbAskMO) {
+				try { jbAskMO.disconnect(); } catch (e) { /* 忽略 */ }
+				jbAskMO = null;
+			}
+			if (jbDoneMO) {
+				try { jbDoneMO.disconnect(); } catch (e) { /* 忽略 */ }
+				jbDoneMO = null;
+			}
 			jbStopAllVoices();  // 停掉旧实例可能还在播的语音
 			if (jbVoiceCache) jbVoiceCache = null;
+			// 实例代际号：旧实例残留路径（document 监听等）即使触发，playVoiceIndex 也会拒绝播放
+			const myApplyId = ++jbActiveApplyId;
 			jbApplied = true;
 
 			// 1. 注入样式
@@ -513,14 +650,45 @@ window.__ModuleLoader__.load({
 				'<div class="jb-sleepfx" aria-hidden="true">💤</div>',
 				'<div class="jb-menu" aria-hidden="true">',
 				'  <div class="jb-menu-title">🐳 鲸宝设置</div>',
-				'  <label class="jb-menu-item"><input type="checkbox" data-k="enabled" /> 系统监控</label>',
-				'  <label class="jb-menu-item"><input type="checkbox" data-k="cpu" /> CPU 占用率</label>',
-				'  <label class="jb-menu-item"><input type="checkbox" data-k="mem" /> 内存占用率</label>',
-				'  <label class="jb-menu-item"><input type="checkbox" data-k="gpu" /> 显卡占用率</label>',
-				'  <div class="jb-menu-title">🔊 语音播报</div>',
-				'  <label class="jb-menu-item"><input type="checkbox" data-k="voiceConfirm" /> 需求确认播报</label>',
-				'  <label class="jb-menu-item"><input type="checkbox" data-k="voicePoke" /> 点击互动播报</label>',
-				'  <label class="jb-menu-item"><input type="checkbox" data-k="voiceDone" /> 任务完成播报</label>',
+				'  <div class="jb-menu-parent" data-group="monitor">',
+				'    <label class="jb-menu-item jb-menu-master"><input type="checkbox" data-k="enabled" /> 性能监测</label>',
+				'    <button class="jb-menu-arrow" type="button" aria-label="展开系统监控子菜单">▶</button>',
+				'    <div class="jb-menu-sub">',
+				'      <label class="jb-menu-item"><input type="checkbox" data-k="cpu" /> CPU 占用率</label>',
+				'      <label class="jb-menu-item"><input type="checkbox" data-k="mem" /> 内存占用率</label>',
+				'      <label class="jb-menu-item"><input type="checkbox" data-k="gpu" /> 显卡占用率</label>',
+				'    </div>',
+				'  </div>',
+				'  <div class="jb-menu-parent" data-group="voice">',
+				'    <label class="jb-menu-item jb-menu-master"><input type="checkbox" data-k="voiceAll" /> 语音播报</label>',
+				'    <button class="jb-menu-arrow" type="button" aria-label="展开语音播报子菜单">▶</button>',
+				'    <div class="jb-menu-sub">',
+				'      <label class="jb-menu-item"><input type="checkbox" data-k="voiceConfirm" /> 需求确认播报</label>',
+				'      <label class="jb-menu-item"><input type="checkbox" data-k="voiceAsk" /> 提问回答播报</label>',
+				'      <label class="jb-menu-item"><input type="checkbox" data-k="voicePoke" /> 点击互动播报</label>',
+				'      <label class="jb-menu-item"><input type="checkbox" data-k="voiceDone" /> 任务完成播报</label>',
+				'    </div>',
+				'  </div>',
+				'  <div class="jb-menu-title">🎧 播报音量</div>',
+				'  <div class="jb-menu-vol">',
+				'    <button class="jb-menu-mute" type="button" data-k="voiceMute" aria-label="静音开关">🔊</button>',
+				'    <input class="jb-menu-range" type="range" min="0" max="100" step="1" data-k="voiceVolume" value="70" aria-label="播报音量" />',
+				'  </div>',
+				'  <div class="jb-menu-item jb-menu-help" data-help="1">📖 如何与鲸宝相处</div>',
+				"</div>",
+				'<div class="jb-help-panel" aria-hidden="true">',
+				'  <div class="jb-help-title">🐳 如何与鲸宝相处</div>',
+				'  <div class="jb-help-body">',
+				'    <p>● 主人点一下鲸宝，鲸宝会幸福摇头或双手比心，还会说甜甜的话～</p>',
+				'    <p>● 按住鲸宝拖一拖，鲸宝会乖乖跟着主人走（位置鲸宝会记住哦）</p>',
+				'    <p>● 滚轮转转，鲸宝可以变大变小（128~512，大小也记着呢）</p>',
+				'    <p>● 右键点鲸宝，可以打开鲸宝的设置菜单</p>',
+				'    <p>● 鲸宝会提醒主人：需求确认、提问回答、任务完成、点击互动，都可以单独开关；音量可以调，小喇叭可以一键静音</p>',
+				'    <p>● 3 分钟没理鲸宝，她会打瞌睡💤，主人鼠标一动，鲸宝立刻醒来迎接；鲸宝还会整点报时、劝主人休息、深夜提醒别熬夜——更多小小细节等主人发现哦～</p>',
+				'    <p>● 鲸宝可以实时监测 CPU / 内存 / GPU 的占用（1 秒刷新），GPU 数值动一动 = 任务正在跑</p>',
+				'    <p class="jb-help-tip">💡 现在还没有键盘快捷键，全靠主人和鲸宝的默契，鲸宝很好相处的～</p>',
+				'  </div>',
+				'  <button class="jb-help-close" type="button">知道了</button>',
 				"</div>",
 				'<div class="jb-monitor" aria-hidden="true"><span class="jb-monitor-text"></span></div>',
 				'<button class="jb-body" type="button" aria-label="鲸宝桌宠">',
@@ -540,6 +708,7 @@ window.__ModuleLoader__.load({
 			const bubbleNo = root.querySelector(".jb-bubble-btn-no");
 			const sleepFx = root.querySelector(".jb-sleepfx");
 			const menu = root.querySelector(".jb-menu");
+			const helpPanel = root.querySelector(".jb-help-panel");
 			const monitorPanel = root.querySelector(".jb-monitor");
 			const monitorText = root.querySelector(".jb-monitor-text");
 
@@ -797,15 +966,27 @@ window.__ModuleLoader__.load({
 			// 不能停局部 voiceCache —— apply 重入时两个实例的局部池互不相通，会双双播放！
 			function playVoiceIndex(group, idx) {
 				try {
-					// 语音开关：confirm→voiceConfirm / poke→voicePoke / done→voiceDone（右键菜单控制）
-					const voiceKey = group === "confirm" ? "voiceConfirm" : group === "poke" ? "voicePoke" : group === "done" ? "voiceDone" : null;
+					// 实例代际检查：旧 apply 实例的残留监听（document 级）触发时拒绝播放，杜绝多声音叠加
+					if (myApplyId !== jbActiveApplyId) return;
+					// 语音总开关（主菜单「🔊 语音播报」checkbox）：关闭 → 所有播报不响
+					if (monitor && monitor.voiceAll === false) return;
+					// 语音开关：confirm→voiceConfirm / ask→voiceAsk / poke→voicePoke / done→voiceDone（右键菜单控制）
+					const voiceKey = group === "confirm" ? "voiceConfirm" : group === "ask" ? "voiceAsk" : group === "poke" ? "voicePoke" : group === "done" ? "voiceDone" : null;
 					if (voiceKey && monitor && monitor[voiceKey] === false) return;  // 该语音已关闭 → 不播
 					const list = voiceCache[group];
 					if (!list || !list[idx]) return;
-					jbStopAllVoices();             // 停全局池（跨实例互斥）
+					if (monitor && monitor.voiceMuted === true) return;  // 全局静音（小喇叭🔇 状态，恢复时从暂停处继续）
+					// 新语音播放：清掉旧的暂停记录（新播报优先，不再继续旧的）
+					jbPausedVoice = null;
+					jbPausedAt = 0;
+					jbStopAllVoices();             // 停全局池（无脑 pause，跨实例互斥）
 					const a = list[idx];
 					a.currentTime = 0;             // 从头播放（预加载好，无延迟）
-					a.volume = 0.8;
+					// 音量条（默认 70，留出上调空间）
+					const vol = monitor && typeof monitor.voiceVolume === "number"
+						? Math.max(0, Math.min(1, monitor.voiceVolume / 100))
+						: 0.7;
+					a.volume = vol;
 					a.play().catch(() => {});
 				} catch (e) { /* 忽略 */ }
 			}
@@ -917,7 +1098,9 @@ window.__ModuleLoader__.load({
 			// 5f. 右键菜单 + 系统监控（CPU/内存/显卡，数据来自本地 8765 监控服务）
 			//      + 语音播报开关（确认/点击/任务完成，默认全开）
 			const MONITOR_KEY = "dsh.pet.monitor.v1";
-			let monitor = { enabled: false, cpu: true, mem: true, gpu: true, voiceConfirm: true, voicePoke: true, voiceDone: true };
+			let monitor = { enabled: false, cpu: true, mem: true, gpu: true, voiceAll: true, voiceConfirm: true, voiceAsk: true, voicePoke: true, voiceDone: true, voiceVolume: 70, voiceMuted: false };
+			let jbPausedVoice = null;  // 小喇叭🔇 暂停的语音 Audio（🔊 恢复时从暂停处继续播）
+			let jbPausedAt = 0;        // 暂停位置（秒）
 			try {
 				monitor = Object.assign(monitor, JSON.parse(localStorage.getItem(MONITOR_KEY) || "{}"));
 			} catch (e) { /* ignore */ }
@@ -926,26 +1109,90 @@ window.__ModuleLoader__.load({
 			}
 			function renderMenu() {
 				menu.querySelectorAll("input[data-k]").forEach((cb) => {
+					if (cb.type === "range") return;  // 音量条单独处理
 					const k = cb.dataset.k;
 					cb.checked = monitor[k] === true;
-					// 监控子项受 enabled 控制；语音开关独立（不受监控开关影响）
+					// 监控子项受 enabled 控制；语音子项受 voiceAll 总开关控制（语音总开关独立于监控）
 					const isMonSub = k === "cpu" || k === "mem" || k === "gpu";
-					cb.disabled = isMonSub && !monitor.enabled;
-					cb.parentElement.style.opacity = isMonSub && !monitor.enabled ? "0.45" : "1";
+					const isVoiceSub = k === "voiceConfirm" || k === "voiceAsk" || k === "voicePoke" || k === "voiceDone";
+					const subDisabled = (isMonSub && !monitor.enabled) || (isVoiceSub && monitor.voiceAll === false);
+					cb.disabled = subDisabled;
+					cb.parentElement.style.opacity = subDisabled ? "0.45" : "1";
 				});
+				// 音量条 + 静音按钮
+				const range = menu.querySelector("input[data-k='voiceVolume']");
+				if (range) range.value = String(typeof monitor.voiceVolume === "number" ? monitor.voiceVolume : 70);
+				const muteBtn = menu.querySelector("button[data-k='voiceMute']");
+				if (muteBtn) muteBtn.textContent = monitor.voiceMuted ? "🔇" : "🔊";
 			}
 			body.addEventListener("contextmenu", (e) => {
 				e.preventDefault();
+				// 打开菜单时重置：收起所有子菜单 + 隐藏手册面板
+				menu.querySelectorAll(".jb-menu-parent").forEach((p) => p.classList.remove("open"));
+				helpPanel.style.display = "none";
 				renderMenu();
 				menu.style.display = "block";
 				menu.style.left = Math.max(4, Math.min(e.clientX, window.innerWidth - 180)) + "px";
-				menu.style.top = Math.max(4, Math.min(e.clientY, window.innerHeight - 170)) + "px";
+				menu.style.top = Math.max(4, Math.min(e.clientY, window.innerHeight - 110)) + "px";  // 瘦身后菜单更矮
 			});
 			document.addEventListener("mousedown", (e) => {
 				if (!menu.contains(e.target)) menu.style.display = "none";
+				if (!helpPanel.contains(e.target)) helpPanel.style.display = "none";
 			});
 			menu.addEventListener("click", (e) => {
-				const cb = e.target.closest("input[data-k]");
+				// 操控手册：显示说明面板
+				if (e.target.closest(".jb-menu-help")) {
+					menu.style.display = "none";
+					helpPanel.style.display = "block";
+					helpPanel.style.left = Math.max(8, Math.min(e.clientX, window.innerWidth - 320)) + "px";
+					helpPanel.style.top = Math.max(8, Math.min(e.clientY, window.innerHeight - 320)) + "px";
+					return;
+				}
+				// 静音按钮（暂停/继续语义，人性化设计）：🔇 暂停正在播的语音并记住位置，🔊 从暂停处继续播
+				const muteBtn = e.target.closest("button[data-k='voiceMute']");
+				if (muteBtn) {
+					monitor.voiceMuted = !monitor.voiceMuted;
+					saveMonitor();
+					renderMenu();
+					if (monitor.voiceMuted) {
+						// 暂停：记录正在播的语音及其位置（在 jbStopAllVoices 清零前抓取）
+						jbPausedVoice = null;
+						jbPausedAt = 0;
+						try {
+							if (jbVoiceCache) {
+								outer:
+								for (const g of Object.keys(jbVoiceCache)) {
+									for (const a of (jbVoiceCache[g] || [])) {
+										if (a && !a.paused && a.currentTime > 0 && a.readyState >= 2) {
+											jbPausedVoice = a;
+											jbPausedAt = a.currentTime;
+											break outer;
+										}
+									}
+								}
+							}
+						} catch (e) { /* ignore */ }
+						jbStopAllVoices();
+					} else {
+						// 继续：从暂停处接着播（用户点击手势，不会被自动播放策略拦截）
+						if (jbPausedVoice) {
+							const pv = jbPausedVoice;
+							const pa = jbPausedAt;
+							jbPausedVoice = null;
+							jbPausedAt = 0;
+							try {
+								pv.currentTime = pa;
+								const vol = monitor && typeof monitor.voiceVolume === "number"
+									? Math.max(0, Math.min(1, monitor.voiceVolume / 100))
+									: 0.7;
+								pv.volume = vol;
+								pv.play().catch(() => {});
+							} catch (e2) { /* ignore */ }
+						}
+					}
+					return;
+				}
+				const cb = e.target.closest("input[data-k]:not([type='range'])");
 				if (!cb) return;
 				const k = cb.dataset.k;
 				if (k === "enabled") monitor.enabled = cb.checked;
@@ -958,6 +1205,29 @@ window.__ModuleLoader__.load({
 				saveMonitor();
 				renderMenu();
 				startMonitor();
+			});
+			// 子菜单 hover 展开（CSS 处理显示），这里只负责弹出方向自适应：
+			// 主菜单靠近右边缘时子菜单向左弹（否则会被屏幕截断）
+			menu.addEventListener("mouseover", (e) => {
+				const parent = e.target.closest(".jb-menu-parent");
+				if (!parent) return;
+				const sub = parent.querySelector(".jb-menu-sub");
+				if (!sub) return;
+				const mr = menu.getBoundingClientRect();
+				sub.classList.toggle("flip", mr.left + mr.width + 210 > window.innerWidth);
+			});
+			// 手册面板「知道了」按钮（面板是独立元素，事件不冒泡到菜单）
+			helpPanel.addEventListener("click", (e) => {
+				if (e.target.closest(".jb-help-close")) helpPanel.style.display = "none";
+			});
+			// 音量条：拖动实时生效（input 事件）——音量实时应用到语音池，正在播的立即变音量
+			menu.addEventListener("input", (e) => {
+				const range = e.target.closest("input[data-k='voiceVolume']");
+				if (!range) return;
+				monitor.voiceVolume = parseInt(range.value, 10);
+				if (isNaN(monitor.voiceVolume)) monitor.voiceVolume = 70;
+				saveMonitor();
+				jbApplyVoiceVolume(monitor);  // 实时应用到所有 Audio（含正在播的）
 			});
 			// 监控轮询（每 2 秒）
 			let statsTimer = null;
@@ -1035,8 +1305,10 @@ window.__ModuleLoader__.load({
 
 			// 9. 确认联动：检测到确认弹窗 → 鲸宝冒泡提示（不自动消失、暂停随机动作）；
 			//    主人处理完（弹窗关闭/按钮点击）→ 气泡立即消失并恢复随机动作
-			let pendingConfirm = null;  // 挂起的确认（记录弹窗容器，用于检测关闭）
-			let lastAnnouncedKey = null;  // 最近播报过的确认的特征 key（同弹窗去重用）
+			// v5.3 多弹窗化：DSH 连续弹窗（间隔 ~220ms）时，每个弹窗独立跟踪，
+			//    修复「单引用被覆盖 → 第一个弹窗漏播 / 处理完气泡不消失」的 bug
+			let pendingConfirmList = [];  // 挂起的确认弹窗列表（每个条目 {yesBtn, noBtn, container}）
+			let lastAnnouncedKey = null;  // 最近播报过的确认的特征 key（记录用）
 			/** 生成确认弹窗的特征 key：只取按钮文本（最稳定；summary/text 在重渲染时可能缺失/变化）。 */
 			function confirmKey(info) {
 				try {
@@ -1049,19 +1321,27 @@ window.__ModuleLoader__.load({
 			let lastHandledBtns = [];  // 刚处理完的确认弹窗的按钮元素（残留识别：同一元素再出现 = 残留）
 			let lastHandledAt = 0;
 			let lastHandledKey = null;  // 刚处理完的弹窗特征 key（React 重渲染会重建按钮元素、元素 === 失效，用 key 兜底）
-			const CONFIRM_HANDLE_WINDOW = 1500;  // 处理完 1.5s 内，同一按钮元素/同 key 视为残留
-			function finishConfirm() {
-				if (!pendingConfirm) return;
+			const CONFIRM_HANDLE_WINDOW = 3000;  // 处理完 3s 内，同一按钮元素/同 key 视为残留（批准后残留/自动批准停留通常 <3s）
+			const announcedBtns = new WeakSet();  // 已播报过的按钮元素（同按钮不重复播；WeakSet 不阻止 GC）
+			let lastAnnouncedBtn = null;   // 最近播报的按钮元素（按钮级短窗口去重：同一弹窗多批次信号只播一次）
+			let lastAnnouncedBtnAt = 0;
+			const ANNOUNCE_BTN_WINDOW = 2500;  // 同一按钮 2.5s 内不重复播
+			/** 处理完一个弹窗条目：记录残留信息、从列表移除；列表清空才收尾（清气泡 + 恢复）。 */
+			function finishConfirm(entry) {
+				const idx = pendingConfirmList.indexOf(entry);
+				if (idx === -1) return;
+				pendingConfirmList.splice(idx, 1);
 				// 记录刚处理弹窗的按钮元素（React 关闭动画/重渲染时这些元素可能还在 → 识别为残留）
 				lastHandledBtns = [];
-				if (pendingConfirm.yesBtn) lastHandledBtns.push(pendingConfirm.yesBtn);
-				if (pendingConfirm.noBtn) lastHandledBtns.push(pendingConfirm.noBtn);
-				lastHandledKey = confirmKey(pendingConfirm);  // 同 key 兜底（按钮被 React 重建时用）
+				if (entry.yesBtn) lastHandledBtns.push(entry.yesBtn);
+				if (entry.noBtn) lastHandledBtns.push(entry.noBtn);
+				lastHandledKey = confirmKey(entry);  // 同 key 兜底（按钮被 React 重建时用）
 				lastHandledAt = Date.now();
-				pendingConfirm = null;
-				bubbleActions.classList.remove("show");
-				bubble.classList.remove("show");
-				resumeIdleTimer();  // 恢复随机动作计时器
+				if (pendingConfirmList.length === 0) {
+					bubbleActions.classList.remove("show");
+					bubble.classList.remove("show");
+					if (!pendingAsk) resumeIdleTimer();  // 提问事件还挂着就不恢复
+				}
 			}
 			function showConfirmBubble(info) {
 				// 只提示符合人设的话语（不带按钮、不自动消失）
@@ -1072,17 +1352,17 @@ window.__ModuleLoader__.load({
 				if (bubbleTimer) clearTimeout(bubbleTimer);  // 清掉普通气泡的自动关闭定时器
 				stopIdleTimer();  // 暂停随机动作计时器
 				playVoiceIndex("confirm", cIdx);  // 语音与气泡同句
-				pendingConfirm = info;
-				// 主人点击弹窗里的同意/拒绝按钮 → 气泡立即消失
-				const onBtn = () => finishConfirm();
+				pendingConfirmList.push(info);  // 多弹窗：各自入列，互不覆盖
+				// 主人点击弹窗里的同意/拒绝按钮 → 该弹窗处理完
+				const onBtn = () => finishConfirm(info);
 				if (info.yesBtn) info.yesBtn.addEventListener("click", onBtn, { once: true });
 				if (info.noBtn) info.noBtn.addEventListener("click", onBtn, { once: true });
 				trackConfirmFallback();  // 终极兜底：轮询检查确认按钮是否还在页面上
 			}
-			// 终极兜底：不依赖 container，定期检查页面里是否还存在「确认/取消」类按钮；
-			// 弹窗关闭（按钮被移除）→ 气泡消失 + 恢复随机动作
+			// 终极兜底：定期检查页面里是否还存在「确认/取消」类按钮；
+			// 全部弹窗关闭（按钮都被移除）→ 清空列表 + 气泡消失 + 恢复随机动作
 			function trackConfirmFallback() {
-				if (!pendingConfirm) return;  // 无挂起确认时停止轮询
+				if (pendingConfirmList.length === 0) return;  // 无挂起确认时停止轮询
 				let hasBtn = false;
 				try {
 					const all = document.querySelectorAll("button, [role='button']");
@@ -1094,25 +1374,38 @@ window.__ModuleLoader__.load({
 						}
 					}
 				} catch (e) { /* ignore */ }
-				if (!hasBtn && pendingConfirm) {
-					finishConfirm();  // 挂起的确认按钮消失 = 弹窗正常关闭
+				if (!hasBtn) {
+					// 页面已无任何确认按钮：所有挂起弹窗都已关闭 → 整批收尾
+					const lastEntry = pendingConfirmList[pendingConfirmList.length - 1];
+					if (lastEntry) {
+						lastHandledBtns = [];
+						if (lastEntry.yesBtn) lastHandledBtns.push(lastEntry.yesBtn);
+						if (lastEntry.noBtn) lastHandledBtns.push(lastEntry.noBtn);
+						lastHandledKey = confirmKey(lastEntry);
+						lastHandledAt = Date.now();
+					}
+					pendingConfirmList = [];
+					bubbleActions.classList.remove("show");
+					bubble.classList.remove("show");
+					if (!pendingAsk) resumeIdleTimer();
 					return;
 				}
-				// 残留窗口：不提前清空，等 MO 检测到过期时自然清理
 				setTimeout(trackConfirmFallback, 500);
 			}
 			let lastConfirmAt = 0;
-			let pendingAnnounce = null;  // 待验证的播报（延迟验证弹窗是否真实存在）
 			const mo = new MutationObserver((muts) => {
-				// 弹窗被移除/隐藏（ESC、遮罩、React 隐藏）→ 气泡消失 + 恢复计时器
-				if (pendingConfirm && pendingConfirm.container) {
-					const c = pendingConfirm.container;
-					let hidden = false;
-					try {
-						const st = window.getComputedStyle(c);
-						hidden = st.display === "none" || st.visibility === "hidden";
-					} catch (e) { /* ignore */ }
-					if (!document.contains(c) || hidden) finishConfirm();
+				// 弹窗被移除/隐藏（ESC、遮罩、React 隐藏）→ 逐个移除对应条目
+				if (pendingConfirmList.length > 0) {
+					for (let k = pendingConfirmList.length - 1; k >= 0; k -= 1) {
+						const c = pendingConfirmList[k].container;
+						if (!c) continue;
+						let hidden = false;
+						try {
+							const st = window.getComputedStyle(c);
+							hidden = st.display === "none" || st.visibility === "hidden";
+						} catch (e) { /* ignore */ }
+						if (!document.contains(c) || hidden) finishConfirm(pendingConfirmList[k]);
+					}
 				}
 				for (let i = 0; i < muts.length; i += 1) {
 					const added = muts[i].addedNodes;
@@ -1121,9 +1414,9 @@ window.__ModuleLoader__.load({
 						if (info) {
 							const now = Date.now();
 							const key = confirmKey(info);
-							// 同弹窗去重：当前挂起的确认（内容相同）不重复播
-							const sameDialog = pendingConfirm && lastAnnouncedKey && key && key === lastAnnouncedKey;
-							if (sameDialog) return;
+							// 已播报过的按钮（同一弹窗重复信号）→ 不重复播
+							if ((info.yesBtn && announcedBtns.has(info.yesBtn)) ||
+								(info.noBtn && announcedBtns.has(info.noBtn))) return;
 							// 残留识别：信号按钮是"刚处理完弹窗"的同一个按钮元素，且在 1.5s 窗口内 → 残留
 							// （React 关闭动画/重渲染会复用同一按钮元素；新弹窗的按钮是全新元素）
 							const nowH = Date.now();
@@ -1143,15 +1436,11 @@ window.__ModuleLoader__.load({
 								lastHandledAt = 0;
 								lastHandledKey = null;
 							}
-							// 延迟验证法：信号出现后（默认 400ms，同 key 残留放宽到 1s）再看"信号自己的按钮是否还在页面上"。
-							//   - 真新需求：弹窗稳定存在 → 按钮还在 → 播（覆盖播放）
-							//   - React 残留：按钮被移除/替换 → 验证时不在 → 不播
-							// 注意：只验证信号自己的按钮，**不检查页面其他按钮**（新弹窗的按钮会导致残留误判）
-							if (pendingAnnounce) { clearTimeout(pendingAnnounce); pendingAnnounce = null; }
+							// 延迟验证法：每个信号**独立**调度（不互相取消——多弹窗要各自播报），
+							// 验证"信号自己的按钮是否还在页面上"（不检查页面其他按钮，避免误判）。
 							const schedInfo = info;
 							const verifyDelay = isRecentHandledKey ? 1000 : 400;
-							pendingAnnounce = setTimeout(() => {
-								pendingAnnounce = null;
+							setTimeout(() => {
 								// 验证：信号自己的按钮还在页面上吗？
 								let stillThere = false;
 								try {
@@ -1159,11 +1448,24 @@ window.__ModuleLoader__.load({
 									else if (schedInfo.noBtn && document.contains(schedInfo.noBtn)) stillThere = true;
 								} catch (e) { /* ignore */ }
 								if (!stillThere) return;  // 按钮已消失 = 残留 → 不播
-								// 真弹窗：播报（覆盖上一条未播完的语音）
+								// 已处理/已批准状态检查：按钮被禁用（disabled）说明弹窗已被处理或 DSH 自动批准中 →
+								// 主人不需要确认，不播（修复「批准后 pwsh 免批执行却误播确认语音」）
+								try {
+									const liveBtn = (schedInfo.yesBtn && document.contains(schedInfo.yesBtn)) ? schedInfo.yesBtn : schedInfo.noBtn;
+									if (liveBtn && (liveBtn.disabled === true || liveBtn.getAttribute("aria-disabled") === "true")) return;
+								} catch (e) { /* ignore */ }
 								const t2 = Date.now();
+								// 验证通过后再查一次已播（400ms 内可能已被其他信号播过同一按钮）
+								const btnRef = schedInfo.yesBtn || schedInfo.noBtn;
+								if (btnRef && (announcedBtns.has(btnRef) ||
+									(btnRef === lastAnnouncedBtn && t2 - lastAnnouncedBtnAt < ANNOUNCE_BTN_WINDOW))) return;
+								// 真弹窗：播报（覆盖上一条未播完的语音，但每个弹窗都播一次）
 								if (t2 - lastConfirmAt >= 200) {  // 极小防抖，避免同批次重复调度
 									lastConfirmAt = t2;
 									lastAnnouncedKey = key;
+									if (schedInfo.yesBtn) announcedBtns.add(schedInfo.yesBtn);
+									if (schedInfo.noBtn) announcedBtns.add(schedInfo.noBtn);
+									if (btnRef) { lastAnnouncedBtn = btnRef; lastAnnouncedBtnAt = t2; }
 									showConfirmBubble(schedInfo);
 								}
 							}, verifyDelay);
@@ -1176,17 +1478,140 @@ window.__ModuleLoader__.load({
 			if (jbConfirmMO) { try { jbConfirmMO.disconnect(); } catch (e) { /* 忽略 */ } }
 			jbConfirmMO = mo;
 			mo.observe(document.body, { childList: true, subtree: true });
-			// 兜底：pendingConfirm 期间，主人点击任意「同意/取消」类按钮 → 需求已处理，气泡消失
+			// 兜底：挂起确认期间，主人点击任意「同意/取消」类按钮 → 该需求已处理，气泡消失
 			// （宽松包含匹配，覆盖「同意并继续」「确认授权」等组合文案；React 重建也不怕）
 			document.addEventListener("click", (e) => {
-				if (!pendingConfirm) return;
+				if (pendingConfirmList.length === 0) return;
 				const btn = e.target.closest("button, [role='button']");
 				if (!btn) return;
 				const text = (btn.textContent || "").trim();
 				if (text && text.length <= 12 && (CONFIRM_CONTAINS.test(text) || CANCEL_CONTAINS.test(text))) {
-					setTimeout(finishConfirm, 350);  // 稍等弹窗关闭
+					// 找到包含被点按钮的挂起条目（找不到则处理最后一个）
+					const entry = pendingConfirmList.find((it) => (it.yesBtn === btn) || (it.noBtn === btn)) ||
+						pendingConfirmList[pendingConfirmList.length - 1];
+					if (entry) setTimeout(() => finishConfirm(entry), 350);  // 稍等弹窗关闭
 				}
 			}, true);
+
+			// 9a2. 提问提醒：agent 用 ask_user_question 问主人「接下来怎么选」的提问框（v5.1 新增）
+			// DSH 提问框稳定锚点：外层 `data-question-key`（通用提问）/ `data-plan-review-key`（plan review）
+			// 出现 → 冒泡 + 语音（voice_ask）；主人提交/跳过/取消后提问框被移除 → 气泡消失恢复
+			let pendingAsk = null;          // 挂起的提问（记录提问框容器）
+			let lastAskKey = null;          // 最近播报过的提问 key（同框去重）
+			let lastAskHandledKey = null;   // 刚处理完的提问 key（React 重建防线：元素会被重建，用 key 兜底）
+			let lastAskHandledAt = 0;
+			const ASK_HANDLE_WINDOW = 1500; // 处理完 1.5s 内同 key 视为残留
+			let lastAskAt = 0;
+			let pendingAskAnnounce = null;
+			/** 提问框特征 key：优先 data-question-key / data-plan-review-key（最稳定），兜底取文本。 */
+			function askKey(el) {
+				try {
+					const q = el.getAttribute("data-question-key");
+					if (q) return "Q:" + q;
+					const p = el.getAttribute("data-plan-review-key");
+					if (p) return "P:" + p;
+				} catch (e) { /* ignore */ }
+				try {
+					const t = (el.textContent || "").trim().replace(/\s+/g, " ").slice(0, 60);
+					if (t) return "T:" + t;
+				} catch (e) { /* ignore */ }
+				return "";
+			}
+			/** 在新增节点里定位提问框容器（自身或后代带锚点属性）。 */
+			function findAskSignal(node) {
+				if (!node || node.nodeType !== 1) return null;
+				try {
+					if (node.hasAttribute && (node.hasAttribute("data-question-key") || node.hasAttribute("data-plan-review-key"))) return node;
+					if (node.querySelector) {
+						const el = node.querySelector("[data-question-key], [data-plan-review-key]");
+						if (el) return el;
+					}
+				} catch (e) { /* ignore */ }
+				return null;
+			}
+			function finishAsk() {
+				if (!pendingAsk) return;
+				lastAskHandledKey = askKey(pendingAsk.container);
+				lastAskHandledAt = Date.now();
+				pendingAsk = null;
+				bubbleActions.classList.remove("show");
+				bubble.classList.remove("show");
+				if (pendingConfirmList.length === 0) resumeIdleTimer();  // 确认事件还挂着就不恢复
+			}
+			function showAskBubble(container) {
+				const aIdx = Math.floor(Math.random() * ASK_LINES.length);
+				bubbleText.textContent = ASK_LINES[aIdx];
+				bubbleActions.classList.remove("show");
+				bubble.classList.add("show");
+				if (bubbleTimer) clearTimeout(bubbleTimer);
+				stopIdleTimer();
+				playVoiceIndex("ask", aIdx);
+				pendingAsk = { container };
+				trackAskFallback();
+			}
+			/** 兜底轮询：页面上提问框锚点不存在 = 已处理完。 */
+			function trackAskFallback() {
+				if (!pendingAsk) return;
+				let still = false;
+				try {
+					const el = document.querySelector("[data-question-key], [data-plan-review-key]");
+					if (el && document.contains(el)) still = true;
+				} catch (e) { /* ignore */ }
+				if (!still && pendingAsk) { finishAsk(); return; }
+				setTimeout(trackAskFallback, 500);
+			}
+			const askMo = new MutationObserver((muts) => {
+				// 挂起提问的容器消失/隐藏（提交/跳过/取消后 React 移除）→ 处理完
+				if (pendingAsk && pendingAsk.container) {
+					const c = pendingAsk.container;
+					let hidden = false;
+					try {
+						const st = window.getComputedStyle(c);
+						hidden = st.display === "none" || st.visibility === "hidden";
+					} catch (e) { /* ignore */ }
+					if (!document.contains(c) || hidden) finishAsk();
+				}
+				for (let i = 0; i < muts.length; i += 1) {
+					const added = muts[i].addedNodes;
+					for (let j = 0; j < added.length; j += 1) {
+						const el = findAskSignal(added[j]);
+						if (!el) continue;
+						const now = Date.now();
+						const key = askKey(el);
+						// 同框去重：当前挂起且 key 相同 → 不重复播
+						if (pendingAsk && lastAskKey && key && key === lastAskKey) return;
+						// 刚处理完（窗口内）同 key → React 重渲染残留 → 长验证窗口甄别
+						const isRecentHandled = lastAskHandledKey && now - lastAskHandledAt < ASK_HANDLE_WINDOW && key && key === lastAskHandledKey;
+						if (lastAskHandledKey && now - lastAskHandledAt >= ASK_HANDLE_WINDOW) {
+							lastAskHandledKey = null;
+							lastAskHandledAt = 0;
+						}
+						if (pendingAskAnnounce) { clearTimeout(pendingAskAnnounce); pendingAskAnnounce = null; }
+						const schedEl = el;
+						const verifyDelay = isRecentHandled ? 1000 : 400;
+						pendingAskAnnounce = setTimeout(() => {
+							pendingAskAnnounce = null;
+							// 延迟验证：提问框自己还在页面上吗？（残留会被 React 移除）
+							let still = false;
+							try {
+								if (document.contains(schedEl)) still = true;
+							} catch (e) { /* ignore */ }
+							if (!still) return;
+							const t2 = Date.now();
+							if (t2 - lastAskAt >= 200) {  // 极小防抖
+								lastAskAt = t2;
+								lastAskKey = key;
+								showAskBubble(schedEl);
+							}
+						}, verifyDelay);
+						return;
+					}
+				}
+			});
+			// 全局唯一：apply 重入先断开旧的
+			if (jbAskMO) { try { jbAskMO.disconnect(); } catch (e) { /* 忽略 */ } }
+			jbAskMO = askMo;
+			askMo.observe(document.body, { childList: true, subtree: true });
 
 			// 9b. 任务完成播报（v4 精准化）：只认「回合结束页脚」→ 播报任务完成
 			// DSH 每个对话回合**真正结束**（turn/end）时，会**新插入**一个回合页脚
@@ -1198,6 +1623,22 @@ window.__ModuleLoader__.load({
 			//   → 任务没结束就播报。v4 只认 [data-turn-tail]（回合结束页脚），排除误报。
 			let lastTaskDoneAt = 0;
 			const TASK_DONE_COOLDOWN = 20000;  // 完成后 20 秒内不重复播报
+			// 「加载更早」抑制（v5.2 修复）：点「加载更早/更多」翻历史 → 抑制窗口内新插入的页脚
+			// 一律视为历史加载，不播任务完成。根因：历史增量加载常只有 1~2 个页脚（<批量保护阈值 3），
+			// 躲过 v4 的批量重建保护，旧回合页脚被误判为新任务完成 → 误播。
+			let historyLoadSuppressUntil = 0;
+			const HISTORY_SUPPRESS_MS = 4000;   // 点「加载更早」后 4 秒内新页脚全部静音
+			const HISTORY_LOAD_RE = /加载更早|加载更多|加载较早|查看更多|加载之前|Load earlier|Load more|Show more|load earlier|load more/i;
+			document.addEventListener("click", (e) => {
+				try {
+					const t = e.target;
+					const el = t && t.closest ? t.closest("button, [role='button'], [role='link'], a") : null;
+					const text = ((el || t).textContent || "").trim();
+					if (text && text.length <= 24 && HISTORY_LOAD_RE.test(text)) {
+						historyLoadSuppressUntil = Date.now() + HISTORY_SUPPRESS_MS;
+					}
+				} catch (e2) { /* ignore */ }
+			}, true);
 			// 完整句式：固定词 + 数字 + 固定词（数字可变）
 			const TASK_METRIC_RE = /(用时|耗时|消耗|共花费)\s*[0-9.]+(秒|s|分钟|分)|首\s?token\s*[0-9.]+(秒|s)|[0-9.]+\s*tok\/?s|[0-9.]+\s*tokens?\/s/i;
 			/** 已播报过的回合页脚 turn id（同一回合不重复播；页面生命周期内保留）。 */
@@ -1231,13 +1672,15 @@ window.__ModuleLoader__.load({
 				} catch (e) { /* ignore */ }
 				return false;
 			}
-			/** 处理一个回合页脚：判重 → 批量保护 → 播报。 */
+			/** 处理一个回合页脚：判重 → 历史加载抑制 → 批量保护 → 播报。 */
 			function handleTurnTail(tt) {
 				if (!tt) return;
 				let id = null;
 				try { id = tt.getAttribute && tt.getAttribute("data-turn-tail"); } catch (e) { /* ignore */ }
 				if (id === null || id === "") id = "?";
 				if (seenTurnTails.has(id)) return;   // 同一回合不重复播
+				// 「加载更早」抑制：翻历史加载的历史页脚一律静音（v5.2）
+				if (Date.now() < historyLoadSuppressUntil) { seenTurnTails.add(id); return; }
 				// 批量渲染保护（延迟验证法，与确认弹窗同思路）：
 				// 新页脚出现后等 0.6s —— 若这段时间又冒出多个新页脚 = 切换会话/历史重建，
 				// 全部标记已见不播；若只有它一个 = 真·新回合完成 → 播报
@@ -1253,6 +1696,11 @@ window.__ModuleLoader__.load({
 							if (!seenTurnTails.has(eid)) newIds.push(eid);
 						});
 					} catch (e) { /* ignore */ }
+					// 「加载更早」抑制（v5.2）：验证时刻处于抑制窗口 → 全部静音（点击加载历史时挂起的验证）
+					if (Date.now() < historyLoadSuppressUntil) {
+						newIds.forEach((eid) => seenTurnTails.add(eid));
+						return;
+					}
 					if (newIds.length >= BULK_THRESHOLD) {
 						// 历史批量重建（切换会话等）：全部标记已见，不播报
 						newIds.forEach((eid) => seenTurnTails.add(eid));
@@ -1270,7 +1718,10 @@ window.__ModuleLoader__.load({
 			// 回合结束页脚 MutationObserver（全局单例，apply 重入时先断开旧的）
 			// 同时监听 childList（新增页脚）和 characterData（页脚文本填充）——
 			// DSH 可能"先插入空页脚再填充指标文本"，两种都覆盖
-			const jbDoneMO = new MutationObserver((muts) => {
+			// ⚠️ 命名教训：局部 const 不能叫 jbDoneMO（模块级已有 let jbDoneMO）——
+			//    函数作用域内 const 提升 + TDZ + 遮蔽，apply 开头访问 jbDoneMO 会抛
+			//    "Cannot access before initialization" 拖垮插件 → 局部改名 jbDoneObserver
+			const jbDoneObserver = new MutationObserver((muts) => {
 				// 预热期：页面加载后 3 秒内不播报（等初始 DOM 稳定，避免把已有历史当新任务）
 				if (Date.now() < jbDoneReadyAt) return;
 				for (let i = 0; i < muts.length; i += 1) {
@@ -1292,15 +1743,20 @@ window.__ModuleLoader__.load({
 			function announceTaskDone() {
 				const now = Date.now();
 				if (now - lastTaskDoneAt >= TASK_DONE_COOLDOWN) {
+					// 人性化：这一回合已经播过确认/提问语音（有弹窗提醒过主人了）→
+					// 回合结束不再播任务完成语音，避免「改个代码响两次」的打扰；
+					// 普通回合（没弹窗）任务完成播报照常。
+					if (now - lastConfirmAt < 5000 || now - lastAskAt < 5000) return;
 					lastTaskDoneAt = now;
 					lastActivity = Date.now();  // 播报也算活跃，不打断瞌睡判定
 					scheduleDoneAnnounce();
 				}
 			}
 			if (window.__jbDoneMO) { try { window.__jbDoneMO.disconnect(); } catch (e) { /* 忽略 */ } }
-			window.__jbDoneMO = jbDoneMO;
+			window.__jbDoneMO = jbDoneObserver;
+			jbDoneMO = jbDoneObserver;   // 同步到模块级单例，供 apply 重入时（543 行）断开旧的，避免双观察器
 			const jbDoneReadyAt = Date.now() + 3000;  // 3 秒预热期
-			jbDoneMO.observe(document.body, { childList: true, characterData: true, subtree: true });
+			jbDoneObserver.observe(document.body, { childList: true, characterData: true, subtree: true });
 			// 任务完成播报：检测到回合页脚后播报（0.6s 延迟验证期已排除批量重建）
 			function scheduleDoneAnnounce() {
 				const dIdx = Math.floor(Math.random() * DONE_LINES.length);
