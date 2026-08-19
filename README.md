@@ -75,6 +75,7 @@ Powered by **MiniMax H3 image-to-video** real smooth animations (seamless first/
 | 🎬 真动画 | 挥手 / 微笑合十 / 眨眼 / 幸福摇头 / 双手比心 / 打哈欠 / 歪头瞌睡 / 醒来 / 被抓——全部 H3 生成、首尾帧无缝循环 |
 | 🗣️ 语音 | 点击 4 句 + 确认 4 句 + 提问 3 句 + 任务完成 3 句，专属声线（Qwen3-TTS），气泡与语音同句、瞬时出声不叠加 |
 | 🎚️ 音量控制 | 右键菜单音量条（默认 70，可调 0~100）+ 小喇叭一键静音（暂停/继续），语音总开关 + 分项开关 |
+| 🔄 自动更新 | 启动自动检查 GitHub 新版，鲸宝提醒 + 一键「立即更新」下载替换，重启即升级 |
 | 🖱️ 交互 | 点击摇头/比心+爱心特效、按住拖拽（被抓动画）、滚轮缩放（128~512）、右键菜单（悬停展开子菜单） |
 | 💬 情感陪伴 | 整点报时（每小时不同台词）、节日祝福、劝休息、深夜关怀、待机卖萌 |
 | 💤 瞌睡状态机 | 3 分钟无操作 → 打哈欠 → 头顶💤 → 歪头瞌睡循环 → 鼠标一动醒来迎接 |
@@ -221,6 +222,7 @@ Enable the performance monitor from the right-click menu, and Jingbao shows **CP
 | 🎬 Real Animations | Wave / smile / blink / head-shake / hand-heart / yawn / sleepy loop / wake-up / grabbed — all H3-generated, seamless |
 | 🗣️ Voice | 4 click lines + 4 confirm lines + 3 question lines + 3 task-done lines, own voice (Qwen3-TTS), synced with bubble text |
 | 🎚️ Volume Control | Volume slider in the menu (default 70, 0–100) + mute button (pause/resume), voice master switch + per-category toggles |
+| 🔄 Auto-Update | Auto-checks GitHub for new versions on startup — Jingbao reminds you + one-click "Update Now" downloads & replaces, restart to upgrade |
 | 🖱️ Interaction | Click → head-shake / heart + floating hearts, drag → grabbed, scroll → resize (128–512), right-click menu (hover submenus) |
 | 💬 Companionship | Hourly greetings, holiday wishes, rest reminders, late-night care, idle chat |
 | 💤 Sleep State Machine | 3 min idle → yawn → 💤 → sleepy loop → wake-up the moment you move your mouse |
