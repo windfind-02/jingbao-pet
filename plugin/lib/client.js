@@ -74,6 +74,8 @@ window.__ModuleLoader__.load({
 		const PET_HEIGHT_DEFAULT = 256;
 		const PET_HEIGHT_MIN = 128;
 		const PET_HEIGHT_MAX = 512;
+		/** 当前版本（发布时与 index.js 的 PET_VERSION 同步 + 更新仓库 version 文件）。 */
+		const PET_VERSION = "1.6.0";
 		/** 长时间无操作进入瞌睡的阈值（3 分钟）。 */
 		const SLEEPY_AFTER_MS = 3 * 60 * 1000;
 		/** 连续活跃多久开始劝休息（50 分钟）。 */
@@ -675,6 +677,8 @@ window.__ModuleLoader__.load({
 				'    <input class="jb-menu-range" type="range" min="0" max="100" step="1" data-k="voiceVolume" value="70" aria-label="播报音量" />',
 				'  </div>',
 				'  <div class="jb-menu-item jb-menu-help" data-help="1">📖 如何与鲸宝相处</div>',
+				'  <div class="jb-menu-item jb-menu-update-check" data-update-check="1">🔄 检查更新</div>',
+				'  <div class="jb-menu-item jb-menu-update-do" data-update-do="1" style="display:none">⬇️ 立即更新</div>',
 				"</div>",
 				'<div class="jb-help-panel" aria-hidden="true">',
 				'  <div class="jb-help-title">🐳 如何与鲸宝相处</div>',
@@ -1140,6 +1144,28 @@ window.__ModuleLoader__.load({
 				if (!helpPanel.contains(e.target)) helpPanel.style.display = "none";
 			});
 			menu.addEventListener("click", (e) => {
+				// 检查更新：对比 GitHub 版本号
+				if (e.target.closest(".jb-menu-update-check")) {
+					checkPetUpdate(true);  // 主动检查（强制刷新缓存）
+					return;
+				}
+				// 立即更新：下载新版并替换（node 服务端执行，重启生效）
+				if (e.target.closest(".jb-menu-update-do")) {
+					menu.style.display = "none";
+					showBubble("主人，鲸宝正在更新自己～马上就好～", 4000);
+					fetch("http://127.0.0.1:8765/do-update")
+						.then((r) => r.json())
+						.then((d) => {
+							if (d && d.ok) {
+								showBubble("更新完成！主人重启 dsh web 就能用新版鲸宝啦～", 5000);
+								playVoiceIndex("done", 0);
+							} else {
+								showBubble("呜…更新失败了：" + ((d && d.message) || "未知错误"), 5000);
+							}
+						})
+						.catch(() => showBubble("呜…更新服务连不上，主人检查一下 DSH 吧～", 4000));
+					return;
+				}
 				// 操控手册：显示说明面板
 				if (e.target.closest(".jb-menu-help")) {
 					menu.style.display = "none";
@@ -1220,6 +1246,26 @@ window.__ModuleLoader__.load({
 			helpPanel.addEventListener("click", (e) => {
 				if (e.target.closest(".jb-help-close")) helpPanel.style.display = "none";
 			});
+			// 半自动更新检查：调 node 服务端 /check-update 对比 GitHub 版本号
+			// visible=true（菜单主动检查）时无论结果都提示；false（启动静默）时只有新版本才提示
+			function checkPetUpdate(visible) {
+				const doBtn = menu.querySelector(".jb-menu-update-do");
+				fetch("http://127.0.0.1:8765/check-update")
+					.then((r) => r.json())
+					.then((d) => {
+						if (d && d.hasUpdate) {
+							showBubble("主人，鲸宝有新版本 " + (d.latest || "") + " 啦～右键菜单点「⬇️ 立即更新」就能升级哦～", 5000);
+							if (doBtn) doBtn.style.display = "block";
+						} else if (visible) {
+							showBubble("主人，鲸宝已经是最新版本 " + (d ? d.current : PET_VERSION) + " 啦～", 3200);
+						}
+					})
+					.catch(() => {
+						if (visible) showBubble("呜…检查更新失败了，主人稍后再试试～", 3200);
+					});
+			}
+			// 启动时静默检查一次（有新版才提醒）
+			setTimeout(() => checkPetUpdate(false), 5000);
 			// 音量条：拖动实时生效（input 事件）——音量实时应用到语音池，正在播的立即变音量
 			menu.addEventListener("input", (e) => {
 				const range = e.target.closest("input[data-k='voiceVolume']");
